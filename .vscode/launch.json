@@ -16,10 +16,10 @@
 			"coreConfigs": [
 				{
 					"coreIndex": 0,
-					"programBinary": "target/xtensa-esp32s3-none-elf/debug/s3-display-amoled-touch-app" //!MODIFY
-					// svdFiles describe the hardware register names off the esp peripherals, such as the LEDC peripheral.
-					// They can be downloaded seperatly @ https://github.com/espressif/svd/tree/main/svd
-					//"svdFile": "${workspaceFolder}/esp32c3.svd" //!MODIFY (or remove) | optional field
+					"programBinary": "target/xtensa-esp32s3-none-elf/debug/app"
+					// Configure an ESP32-S3 SVD file here when peripheral-register
+					// names are needed in the debugger.
+					// "svdFile": "${workspaceFolder}/path/to/esp32s3.svd"
 				}
 			]
 		},
@@ -28,13 +28,13 @@
 			"request": "attach",
 			"name": "Attach",
 			"cwd": "${workspaceFolder}",
-			"chip": "esp32s3", //!MODIFY
-			//"probe": "VID:PID:303a:1001:30:30:F9:5A:5E:84", //!MODIFY (or remove) | optional field
+			"chip": "esp32s3",
+			// "probe": "VID:PID:303a:1001:30:30:F9:5A:5E:84"
 			"coreConfigs": [
 				{
 					"coreIndex": 0,
-					"programBinary": "target/xtensa-esp32s3-none-elf/debug/s3-display-amoled-touch-app" //!MODIFY
-					// "svdFile": "${workspaceFolder}/esp32c3.svd" //!MODIFY (or remove) | optional field
+					"programBinary": "target/xtensa-esp32s3-none-elf/debug/app"
+					// "svdFile": "${workspaceFolder}/path/to/esp32s3.svd"
 				}
 			]
 		}

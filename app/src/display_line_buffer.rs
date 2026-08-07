@@ -33,7 +33,9 @@ impl LineBufferProvider for &mut DisplayLineBuffer<'_> {
             .set_pixels(
                 range.start as u16,
                 line as _,
-                range.end as u16,
+                // Slint ranges are end-exclusive, while mipidsi's address
+                // window uses inclusive coordinates.
+                range.end.saturating_sub(1) as u16,
                 line as u16,
                 buffer.iter().map(|x| RawU16::new(x.0).into()),
             )

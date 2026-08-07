@@ -1,124 +1,107 @@
-import { HorizontalBox, VerticalBox, Button } from "std-widgets.slint";
-import { Theme, Toggle, NavButton } from "common.slint";
+import { HorizontalBox, VerticalBox } from "std-widgets.slint";
+import { Toggle, NavButton } from "common.slint";
 
+// Compact landscape UI for the board's 480×222 logical viewport.
 export component AppWindow inherits Window {
-    // Properties
     in-out property <int> battery-percentage: 0;
     in-out property <bool> charging: true;
     in-out property <string> pmu-details: "No data yet\n\nPress refresh in PMU Details screen";
-    in-out property <string> radar-data: "Waiting for radar data...\n\nData updates automatically";
-    in-out property <int> current-screen: 0; // 0: Main, 1: PMU Details, 2: Radar
+    in-out property <string> camera-status: "Camera Shield status is not available yet";
+    in-out property <int> current-screen: 0; // 0: battery, 1: PMU, 2: camera status
 
-    // Callbacks
     callback toggle-charger(bool);
     callback request-pmu-update();
 
-    width: 536px;
-    height: 240px;
-    default-font-size: Theme.font-size-standard;
-    background: Theme.page-background-color;
+    width: 480px;
+    height: 222px;
+    background: white;
 
     HorizontalLayout {
         padding: 0px;
         spacing: 0px;
 
-        // Left Navigation Sidebar
-        nav-sidebar := Rectangle {
-            width: 100px;
+        Rectangle {
+            width: 78px;
             background: #F5F5F5;
             border-color: #E0E0E0;
             border-width: 1px;
 
             VerticalLayout {
-                padding: 6px;
-                spacing: 6px;
+                padding: 4px;
+                spacing: 5px;
                 alignment: start;
 
                 NavButton {
                     label: "Main";
                     active: root.current-screen == 0;
-                    clicked => {
-                        root.current-screen = 0;
-                    }
+                    height: 38px;
+                    clicked => { root.current-screen = 0; }
                 }
-
                 NavButton {
                     label: "PMU";
                     active: root.current-screen == 1;
-                    clicked => {
-                        root.current-screen = 1;
-                    }
+                    height: 38px;
+                    clicked => { root.current-screen = 1; }
                 }
-
                 NavButton {
-                    label: "Radar";
+                    label: "Cam";
                     active: root.current-screen == 2;
-                    clicked => {
-                        root.current-screen = 2;
-                    }
+                    height: 38px;
+                    clicked => { root.current-screen = 2; }
                 }
             }
         }
 
-        // Main content area
-        content-area := Rectangle {
-            width: parent.width - 100px;
+        Rectangle {
+            width: parent.width - 78px;
             background: white;
 
-            // Main Screen (Battery & Charger)
             if root.current-screen == 0: HorizontalLayout {
                 padding: 10px;
-                spacing: 15px;
+                spacing: 10px;
 
-                // Battery Percentage Display (Left Side)
                 VerticalLayout {
-                    width: 60%;
-                    spacing: 5px;
+                    width: 58%;
+                    spacing: 3px;
                     alignment: center;
 
                     Text {
                         text: root.battery-percentage + "%";
-                        font-size: Theme.font-size-huge;
+                        font-size: 60px;
                         font-weight: 900;
                         color: root.battery-percentage < 20 ? #F44336 : (root.battery-percentage < 50 ? #FF9800 : #4CAF50);
                         horizontal-alignment: center;
                     }
-
                     Text {
                         text: "Battery";
-                        font-size: Theme.font-size-standard;
+                        font-size: 18px;
                         color: #666666;
                         horizontal-alignment: center;
                     }
                 }
 
-                // Charger Toggle Section (Right Side)
                 VerticalLayout {
-                    width: 40%;
-                    spacing: 8px;
+                    width: 42%;
+                    spacing: 6px;
                     alignment: center;
 
                     Text {
                         text: "Charger";
-                        font-size: Theme.font-size-standard;
+                        font-size: 18px;
                         color: #201f1e;
                         horizontal-alignment: center;
                     }
-
                     Toggle {
                         on: root.charging;
-                        clicked => {
-                            root.toggle-charger(!self.on);
-                        }
+                        clicked => { root.toggle-charger(!self.on); }
                     }
                 }
             }
 
-            // PMU Details Screen
             if root.current-screen == 1: Rectangle {
                 VerticalLayout {
                     padding: 8px;
-                    spacing: 6px;
+                    spacing: 4px;
 
                     Flickable {
                         height: parent.height;
@@ -127,7 +110,7 @@ export component AppWindow inherits Window {
 
                         pmu-text := Text {
                             text: root.pmu-details;
-                            font-size: Theme.font-size-small;
+                            font-size: 14px;
                             width: parent.viewport-width;
                             wrap: word-wrap;
                             color: #201f1e;
@@ -135,45 +118,44 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // Floating refresh button (bottom right)
-                refresh-btn := Rectangle {
-                    width: 120px;
-                    height: 50px;
-                    x: parent.width - self.width - 12px;
-                    y: parent.height - self.height - 12px;
+                Rectangle {
+                    width: 82px;
+                    height: 34px;
+                    x: parent.width - self.width - 8px;
+                    y: parent.height - self.height - 8px;
                     background: #2196F3;
-                    border-radius: 25px;
+                    border-radius: 17px;
 
                     Text {
                         text: "Refresh";
-                        font-size: Theme.font-size-small;
+                        font-size: 14px;
                         font-weight: 700;
                         color: white;
                         horizontal-alignment: center;
                         vertical-alignment: center;
                     }
-
-                    TouchArea {
-                        clicked => {
-                            root.request-pmu-update();
-                        }
-                    }
+                    TouchArea { clicked => { root.request-pmu-update(); } }
                 }
             }
 
-            // Radar Screen
             if root.current-screen == 2: VerticalLayout {
-                padding: 8px;
-                spacing: 6px;
+                padding: 10px;
+                spacing: 4px;
 
+                Text {
+                    text: "Camera Shield";
+                    font-size: 22px;
+                    font-weight: 700;
+                    color: #201f1e;
+                }
                 Flickable {
                     height: parent.height;
                     interactive: true;
-                    viewport-height: radar-text.preferred-height;
+                    viewport-height: camera-text.preferred-height;
 
-                    radar-text := Text {
-                        text: root.radar-data;
-                        font-size: Theme.font-size-small;
+                    camera-text := Text {
+                        text: root.camera-status;
+                        font-size: 14px;
                         width: parent.viewport-width;
                         wrap: word-wrap;
                         color: #201f1e;

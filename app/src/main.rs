@@ -19,6 +19,7 @@ use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
+use embedded_graphics_core::{draw_target::DrawTarget, pixelcolor::Rgb565};
 use esp_alloc::psram_allocator;
 use esp_backtrace as _;
 use esp_hal::Async;
@@ -28,8 +29,7 @@ use esp_hal::i2c::master::I2c;
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::peripherals::I2C0;
 use esp_hal::timer::timg::TimerGroup;
-use log::info;
-use radar_task::radar_task;
+use log::{error, info};
 use render_task::render_task;
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
 use slint::{ComponentHandle, PhysicalSize};
@@ -43,7 +43,6 @@ use hardware::*;
 
 mod controller;
 mod display_line_buffer;
-mod radar_task;
 mod render_task;
 mod slint_backend;
 
@@ -64,24 +63,56 @@ async fn main(spawner: Spawner) {
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
     info!("Embassy initialized!");
 
-    // Initialize the PSRAM allocator for extra memory requirements
-    psram_allocator!(peripherals.PSRAM, esp_hal::psram);
-
-    // Enable the power management IC by setting the PMICEN pin high
-    let mut pmicen = Output::new(peripherals.GPIO38, Level::Low, OutputConfig::default());
-    pmicen.set_high();
-    info!("PMICEN set high");
-
-    // Initialize the I2C bus used by several peripherals
-    let i2c_bus = initialize_i2c(
-        peripherals.I2C0,
-        peripherals.GPIO3.degrade(),
-        peripherals.GPIO2.degrade(),
+    // LilyGO specifies OPI PSRAM for the T-Display-S3 Pro.
+    psram_allocator!(
+        peripherals.PSRAM,
+        esp_hal::psram,
+        esp_hal::psram::PsramConfig {
+            mode: esp_hal::psram::PsramMode::OctalSpi,
+            ..Default::default()
+        }
     );
 
-    // Detect the connected SPI board model via I2C communication
-    {
-        detect_spi_model(&mut I2cDevice::new(i2c_bus)).await;
+    // The Pro's IPS panel needs its dedicated GPIO48 backlight enabled.
+    let mut _backlight = Output::new(peripherals.GPIO48, Level::Low, OutputConfig::default());
+    _backlight.set_high();
+    info!("T-Display-S3 Pro backlight enabled");
+
+    // Bring the display up before optional I2C peripherals. A bright splash
+    // remains visible if a later peripheral fails during board bring-up.
+    let mut display = initialize_display(
+        peripherals.GPIO47.degrade(),
+        peripherals.GPIO9.degrade(),
+        peripherals.GPIO18.degrade(),
+        peripherals.GPIO17.degrade(),
+        peripherals.GPIO39.degrade(),
+        peripherals.SPI2,
+        peripherals.DMA_CH0,
+    );
+    display
+        .clear(Rgb565::new(0, 63, 0))
+        .expect("Failed to draw display bring-up splash");
+
+    // I2C is shared by touch, PMU, and the optional Camera Shield SCCB bus.
+    let i2c_bus = initialize_i2c(
+        peripherals.I2C0,
+        peripherals.GPIO5.degrade(),
+        peripherals.GPIO6.degrade(),
+    );
+
+    // The optional Camera Shield uses the same I2C bus for SCCB.
+    let _camera_shield = initialize_camera_shield(
+        peripherals.GPIO38.degrade(),
+        peripherals.GPIO46.degrade(),
+        peripherals.GPIO11.degrade(),
+        peripherals.LCD_CAM,
+        peripherals.DMA_CH1,
+    );
+    let camera_sensor_address = probe_camera_sensor(&mut I2cDevice::new(i2c_bus)).await;
+    if let Some(address) = camera_sensor_address {
+        info!("Camera Shield responded at SCCB address 0x{address:02X}");
+    } else {
+        info!("No Camera Shield sensor detected on the SCCB bus");
     }
 
     // Create the GUI window for Slint's minimal software renderer
@@ -94,36 +125,38 @@ async fn main(spawner: Spawner) {
     slint::platform::set_platform(backend).expect("set_platform failed");
 
     // Initialize the touchpad interface for user interactions
-    let touchpad =
-        { initialize_touchpad(I2cDevice::new(i2c_bus), peripherals.GPIO21.degrade()).await };
-
-    // Initialize the display via SPI with DMA support
-    let display = initialize_display(
-        peripherals.GPIO17.degrade(),
-        peripherals.GPIO7.degrade(),
-        peripherals.GPIO47.degrade(),
-        peripherals.GPIO18.degrade(),
-        peripherals.GPIO6.degrade(),
-        peripherals.SPI2,
-        peripherals.DMA_CH0,
-    );
+    let touchpad = match initialize_touchpad(
+        I2cDevice::new(i2c_bus),
+        peripherals.GPIO21.degrade(),
+        peripherals.GPIO13.degrade(),
+    )
+    .await
+    {
+        Ok(touchpad) => Some(touchpad),
+        Err(touch_error) => {
+            error!(
+                "CST226SE touch initialization failed: {touch_error:?}; continuing without touch input"
+            );
+            None
+        }
+    };
 
     // Launch the GUI render task asynchronously
     spawner.spawn(render_task(window, display, touchpad).expect("Unable to spawn render task"));
 
-    // Initialize the radar (LD2410) sensor interface via UART
-    let radar = initialize_radar(
-        peripherals.UART0,
-        peripherals.GPIO44.degrade(),
-        peripherals.GPIO43.degrade(),
-    );
-
-    // Launch the radar task asynchronously
-    spawner.spawn(radar_task(radar).expect("Unable to spawn radar task"));
-
     // Create and show the application window UI
     let app_window = AppWindow::new().expect("UI init failed");
     app_window.show().expect("UI show failed");
+
+    app_window.set_camera_status(
+        match camera_sensor_address {
+            Some(address) => alloc::format!(
+                "Camera Shield detected at SCCB address 0x{address:02X}.\n\nThe installed sensor is intentionally not guessed: LilyGO ships multiple camera modules. Display, touch, PMU, camera clock, and SCCB detection are enabled; add the sensor-specific initialization sequence before starting LCD_CAM capture."
+            ),
+            None => "No Camera Shield sensor responded on SCCB.\n\nCheck the shield connection and power. The T-Display-S3 Pro still supports its display, touch screen, and PMU without the optional camera.".into(),
+        }
+        .into(),
+    );
 
     // Initialize the PMU for battery charging control
     let mut pmu = { initialize_pmu(I2cDevice::new(i2c_bus)).await };
@@ -162,32 +195,4 @@ fn initialize_i2c(
     static I2C_BUS: StaticCell<Mutex<CriticalSectionRawMutex, I2c<'static, Async>>> =
         StaticCell::new();
     I2C_BUS.init(Mutex::new(i2c))
-}
-
-/// Detects the model of the connected SPI board via I2C communication.
-///
-/// This function probes known I2C addresses to identify the board variant.
-/// It helps in determining the correct driver configuration at runtime.
-///
-/// # Detection Strategy
-///
-/// - Checks address `0x15` first to confirm board presence
-/// - Then checks address `0x51` to distinguish between SPI and QSPI variants
-/// - Logs the detected model or error message
-///
-/// # Arguments
-///
-/// * `i2c` - An acquired I2C device handle from the shared bus
-async fn detect_spi_model<I: embedded_hal_async::i2c::I2c>(i2c: &mut I) {
-    // Try to communicate with a known I2C address to identify the board model
-    if i2c.write(0x15, &[]).await.is_ok() {
-        // Check a secondary address to distinguish between SPI and QSPI models
-        if i2c.write(0x51, &[]).await.is_ok() {
-            info!("Detected 1.91-inch SPI board model!");
-        } else {
-            info!("Detected 1.91-inch QSPI board model!");
-        }
-    } else {
-        log::error!("Unable to detect 1.91-inch touch board model!");
-    }
 }

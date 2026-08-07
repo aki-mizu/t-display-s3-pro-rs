@@ -1,10 +1,8 @@
-use embassy_futures::select::{Either, select};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use log::{error, info};
 use slint_generated::AppWindow;
 
 use crate::Charger;
-use crate::radar_task::RADAR_DATA;
 
 pub struct Controller<'a> {
     app_window: &'a AppWindow,
@@ -30,23 +28,10 @@ impl<'a> Controller<'a> {
         self.set_action_event_handlers();
 
         loop {
-            match select(ACTION.receive(), RADAR_DATA.receive()).await {
-                Either::First(action) => {
-                    info!("process action {:?}", &action);
-                    match self.process_action(action).await {
-                        Ok(()) => {
-                            // all good
-                        }
-                        Err(e) => {
-                            error!("process action: {e:?}");
-                        }
-                    }
-                }
-                Either::Second(radar_data) => {
-                    // Update radar display with new data
-                    let info = radar_data.get_info();
-                    self.app_window.set_radar_data(info.into());
-                }
+            let action = ACTION.receive().await;
+            info!("process action {:?}", &action);
+            if self.process_action(action).await.is_err() {
+                error!("process action failed");
             }
         }
     }

@@ -111,10 +111,10 @@ dependencies = [
  "drivers",
  "embassy-embedded-hal",
  "embassy-executor",
- "embassy-futures",
  "embassy-sync 0.8.0",
  "embassy-time",
  "embedded-graphics-core",
+ "embedded-hal 1.0.0",
  "embedded-hal-async",
  "embedded-hal-bus",
  "esp-alloc",
@@ -1168,15 +1168,9 @@ checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 name = "drivers"
 version = "0.15.0"
 dependencies = [
- "bitflags 2.13.1",
  "defmt 1.1.1",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
- "embedded-io 0.7.1",
- "embedded-io-async 0.7.0",
- "libm",
- "log",
- "num_enum",
 ]
 
 [[package]]
@@ -1456,9 +1450,6 @@ name = "embedded-io"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9eb1aa714776b75c7e67e1da744b81a129b3ff919c8712b5e1b32252c1f07cc7"
-dependencies = [
- "defmt 1.1.1",
-]
 
 [[package]]
 name = "embedded-io-async"
@@ -1475,7 +1466,6 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2564b9f813c544241430e147d8bc454815ef9ac998878d30cc3055449f7fd4c0"
 dependencies = [
- "defmt 1.1.1",
  "embedded-io 0.7.1",
 ]
 

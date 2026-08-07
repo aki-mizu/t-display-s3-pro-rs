@@ -1,8 +1,10 @@
 //! Display hardware initialization module
 //!
-//! This module handles the initialization of the RM67162 display controller
-//! via SPI interface with DMA support for high-speed data transfer.
+//! This module initializes the T-Display-S3 Pro's ST7796 IPS panel via SPI
+//! with DMA support.
 
+use embedded_graphics_core::pixelcolor::Rgb565;
+use embedded_hal::delay::DelayNs;
 use embedded_hal_bus::spi::{ExclusiveDevice, NoDelay};
 use esp_hal::dma::DmaTxBuf;
 use esp_hal::gpio::{AnyPin, Level, Output, OutputConfig};
@@ -11,33 +13,112 @@ use esp_hal::spi::Mode;
 use esp_hal::spi::master::{Config as SpiConfig, Spi, SpiDmaBus};
 use esp_hal::time::Rate;
 use esp_hal::{Blocking, dma_buffers};
-use mipidsi::interface::SpiInterface;
-use mipidsi::models::RM67162;
+use mipidsi::dcs::{self, InterfaceExt, SetAddressMode};
+use mipidsi::interface::{Interface, InterfaceKind, SpiInterface};
+use mipidsi::models::{Model, ModelInitError};
+use mipidsi::options::{ColorInversion, ColorOrder, ModelOptions};
 use mipidsi::options::{Orientation, Rotation};
-use mipidsi::{Builder, Display};
+use mipidsi::{Builder, ConfigurationError, Display};
 use static_cell::StaticCell;
 
-/// Display dimensions
-pub const DISPLAY_HEIGHT: u16 = 240;
-pub const DISPLAY_WIDTH: u16 = 536;
+/// The T-Display-S3 Pro panel is physically 222×480. It is used in landscape,
+/// making its logical Slint viewport 480×222.
+pub const DISPLAY_HEIGHT: u16 = 222;
+pub const DISPLAY_WIDTH: u16 = 480;
 
-/// Type alias for the RM67162 display instance using SPI interface
+/// LilyGO's ST7796U panel configuration.
+///
+/// The T-Display-S3 Pro panel needs its vendor-specific power, timing, and
+/// gamma commands. `mipidsi`'s built-in ST7796 model delegates to the much
+/// shorter ST7789 initialization sequence, which leaves this panel black.
+pub struct TDisplayS3ProSt7796;
+
+impl Model for TDisplayS3ProSt7796 {
+    type ColorFormat = Rgb565;
+
+    const FRAMEBUFFER_SIZE: (u16, u16) = (320, 480);
+    const RESET_DURATION: u32 = 120_000;
+
+    fn init<DELAY, DI>(
+        &mut self,
+        di: &mut DI,
+        delay: &mut DELAY,
+        options: &ModelOptions,
+    ) -> Result<SetAddressMode, ModelInitError<DI::Error>>
+    where
+        DELAY: DelayNs,
+        DI: Interface,
+    {
+        if !matches!(DI::KIND, InterfaceKind::Serial4Line) {
+            return Err(ModelInitError::InvalidConfiguration(
+                ConfigurationError::UnsupportedInterface,
+            ));
+        }
+
+        let madctl = SetAddressMode::from(options);
+
+        // This sequence is taken from LilyGO's ST7796U reference setup for
+        // the 222×480 T-Display-S3 Pro panel.
+        delay.delay_us(120_000);
+        di.write_command(dcs::SoftReset)?;
+        delay.delay_us(120_000);
+        di.write_command(dcs::ExitSleepMode)?;
+        delay.delay_us(120_000);
+
+        di.write_raw(0xF0, &[0xC3])?;
+        di.write_raw(0xF0, &[0x96])?;
+        di.write_command(madctl)?;
+        di.write_raw(0x3A, &[0x55])?;
+        di.write_raw(0xB4, &[0x01])?;
+        di.write_raw(0xB6, &[0x80, 0x02, 0x3B])?;
+        di.write_raw(0xE8, &[0x40, 0x8A, 0x00, 0x00, 0x29, 0x19, 0xA5, 0x33])?;
+        di.write_raw(0xC1, &[0x06])?;
+        di.write_raw(0xC2, &[0xA7])?;
+        di.write_raw(0xC5, &[0x18])?;
+        delay.delay_us(120_000);
+
+        di.write_raw(
+            0xE0,
+            &[
+                0xF0, 0x09, 0x0B, 0x06, 0x04, 0x15, 0x2F, 0x54, 0x42, 0x3C, 0x17, 0x14, 0x18, 0x1B,
+            ],
+        )?;
+        di.write_raw(
+            0xE1,
+            &[
+                0xE0, 0x09, 0x0B, 0x06, 0x04, 0x03, 0x2B, 0x43, 0x42, 0x3B, 0x16, 0x14, 0x17, 0x1B,
+            ],
+        )?;
+        delay.delay_us(120_000);
+
+        di.write_raw(0xF0, &[0x3C])?;
+        di.write_raw(0xF0, &[0x69])?;
+        di.write_command(dcs::SetInvertMode::new(options.invert_colors))?;
+        di.write_command(dcs::EnterNormalMode)?;
+        di.write_command(dcs::SetDisplayOn)?;
+        delay.delay_us(120_000);
+
+        Ok(madctl)
+    }
+}
+
+/// ST7796U display instance using the Pro's SPI interface.
 pub type TouchDisplay = Display<
     SpiInterface<
         'static,
         ExclusiveDevice<SpiDmaBus<'static, Blocking>, Output<'static>, NoDelay>,
         Output<'static>,
     >,
-    RM67162,
+    TDisplayS3ProSt7796,
     Output<'static>,
 >;
 
-/// Initializes the RM67162 display with SPI interface and DMA support.
+/// Initializes the ST7796 display with SPI interface and DMA support.
 ///
 /// This function configures:
 /// - GPIO pins for display control (DC, CS, reset, SCK, MOSI)
-/// - SPI bus with DMA at 75MHz
-/// - Display driver with 270-degree rotation
+/// - SPI bus with DMA at 40 MHz in mode 0
+/// - 222×480 active viewport, landscape orientation, BGR color order
 ///
 /// # Arguments
 ///
@@ -51,7 +132,7 @@ pub type TouchDisplay = Display<
 ///
 /// # Returns
 ///
-/// Returns an instance of the RM67162 display driver.
+/// Returns an initialized ST7796 display driver.
 ///
 /// # Panics
 ///
@@ -72,17 +153,15 @@ pub fn initialize_display(
     let sck = Output::new(sck, Level::Low, OutputConfig::default());
     let mosi = Output::new(mosi, Level::Low, OutputConfig::default());
 
-    // Create the SPI instance with DMA support and desired communication settings
-    let spi_dma = Spi::new(
-        spi,
-        SpiConfig::default()
-            .with_frequency(Rate::from_mhz(75))
-            .with_mode(Mode::_0),
-    )
-    .unwrap()
-    .with_sck(sck)
-    .with_mosi(mosi)
-    .with_dma(dma);
+    // LilyGO's pinned Arduino_GFX reference uses 40 MHz SPI mode 0.
+    let spi_config = SpiConfig::default()
+        .with_frequency(Rate::from_mhz(40))
+        .with_mode(Mode::_0);
+    let spi_dma = Spi::new(spi, spi_config)
+        .unwrap()
+        .with_sck(sck)
+        .with_mosi(mosi)
+        .with_dma(dma);
 
     #[allow(clippy::manual_div_ceil)]
     let (rx_buffer, rx_descriptors, tx_buffer, tx_descriptors) = dma_buffers!(32000);
@@ -102,13 +181,21 @@ pub fn initialize_display(
     // Create the SPI interface for the display driver using the SPI device, DC pin, and initialization buffer
     let di = SpiInterface::new(spi_device, dc, buffer);
 
-    // Initialize and configure the RM67162 display with the desired orientation and reset pin handling
-    Builder::new(RM67162, di)
+    // The ST7796 exposes a 222×480 active crop inside its 320×480
+    // framebuffer. Rotate it to the board's landscape orientation.
+    Builder::new(TDisplayS3ProSt7796, di)
+        .display_size(222, 480)
+        .display_offset(49, 0)
+        .color_order(ColorOrder::Bgr)
+        .invert_colors(ColorInversion::Inverted)
         .orientation(Orientation {
-            mirrored: false,
-            rotation: Rotation::Deg270,
+            // The panel is mounted with the landscape X axis reversed. This
+            // yields LilyGO TFT_eSPI's MADCTL 0x28 (MV | BGR), so rendered
+            // text reads left-to-right.
+            mirrored: true,
+            rotation: Rotation::Deg90,
         })
         .reset_pin(reset_pin)
         .init(&mut esp_hal::delay::Delay::new())
-        .expect("Failed to initialize display")
+        .expect("Failed to initialize T-Display-S3 Pro display")
 }
