@@ -42,5 +42,5 @@ slint = { version = "1.16.1", default-features = false, features = [
 ] }
 embassy-sync = { version = "0.8.0", features = [] }
 embassy-embedded-hal = { version = "0.6.0", features = [] }
-slint-generated = { path = "../slint-generated" }
+bitcoin-ui = { path = "../bitcoin-ui" }
 static_cell = { version = "2.1.1", features = ["nightly"] }

@@ -1,31 +1,34 @@
+use bitcoin_ui::{BatteryState, DeviceStatus, WalletUi};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use log::{error, info};
-use slint_generated::AppWindow;
 
 use crate::Charger;
 
 pub struct Controller<'a> {
-    app_window: &'a AppWindow,
+    ui: &'a WalletUi,
     pmu: Charger,
 }
 
 #[derive(Debug, Clone)]
-pub enum Action {
-    RequestPmuUpdate,
-    ToggleCharger(bool),
+enum Action {
+    RefreshDeviceStatus,
 }
 
 type ActionChannelType = Channel<CriticalSectionRawMutex, Action, 2>;
 
-pub static ACTION: ActionChannelType = Channel::new();
+static ACTION: ActionChannelType = Channel::new();
 
 impl<'a> Controller<'a> {
-    pub fn new(app_window: &'a AppWindow, pmu: Charger) -> Self {
-        Self { app_window, pmu }
+    pub fn new(ui: &'a WalletUi, pmu: Charger) -> Self {
+        Self { ui, pmu }
     }
 
     pub async fn run(&mut self) {
         self.set_action_event_handlers();
+
+        if self.refresh_device_status().await.is_err() {
+            error!("initial board-status refresh failed");
+        }
 
         loop {
             let action = ACTION.receive().await;
@@ -36,81 +39,54 @@ impl<'a> Controller<'a> {
         }
     }
 
-    pub async fn process_action(&mut self, action: Action) -> Result<(), ()> {
+    async fn process_action(&mut self, action: Action) -> Result<(), ()> {
         match action {
-            Action::RequestPmuUpdate => match self.pmu.get_info().await {
-                Ok(text) => {
-                    self.app_window.set_pmu_details(text.into());
-                    // Also update battery percentage on main screen
-                    match self.pmu.get_battery_percentage().await {
-                        Ok(percentage) => {
-                            self.app_window.set_battery_percentage(percentage as i32);
-                        }
-                        Err(e) => {
-                            error!("Failed to get battery percentage: {e:?}");
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to get PMU info: {e:?}");
-                    self.app_window.set_pmu_details(
-                        "Error: Failed to read PMU data\nCheck I2C connection".into(),
-                    );
-                    return Err(());
-                }
-            },
-            Action::ToggleCharger(state) => {
-                let result = if state {
-                    self.pmu.set_charge_enabled().await
-                } else {
-                    self.pmu.set_charge_disabled().await
-                };
-
-                match result {
-                    Ok(_) => {
-                        info!("Charger state changed to: {state}");
-                        // Update battery percentage on main screen
-                        match self.pmu.get_battery_percentage().await {
-                            Ok(percentage) => {
-                                self.app_window.set_battery_percentage(percentage as i32);
-                            }
-                            Err(e) => {
-                                error!("Failed to get battery percentage after toggle: {e:?}");
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to toggle charger to {state}: {e:?}");
-                        self.app_window.set_pmu_details(
-                            "Error: Failed to toggle charger\nI2C communication error\nTry again or check hardware"
-                                .into(),
-                        );
-                        return Err(());
-                    }
-                }
-            }
+            Action::RefreshDeviceStatus => self.refresh_device_status().await?,
         }
         Ok(())
     }
 
-    // user initiated action event handlers
+    async fn refresh_device_status(&mut self) -> Result<(), ()> {
+        let percentage = match self.pmu.get_battery_percentage().await {
+            Ok(percentage) => percentage,
+            Err(e) => {
+                error!("Failed to read battery percentage: {e:?}");
+                self.ui.set_device_status(DeviceStatus::BatteryUnavailable);
+                return Err(());
+            }
+        };
+
+        let charging = match self.pmu.is_charging().await {
+            Ok(charging) => charging,
+            Err(e) => {
+                error!("Failed to read charging state: {e:?}");
+                self.ui
+                    .set_device_status(DeviceStatus::ChargerStateUnavailable { percentage });
+                return Err(());
+            }
+        };
+
+        self.ui
+            .set_device_status(DeviceStatus::Battery(BatteryState {
+                percentage,
+                charging,
+            }));
+        Ok(())
+    }
+
     fn set_action_event_handlers(&self) {
-        self.app_window
-            .on_toggle_charger(|state| send_action(Action::ToggleCharger(state)));
-        self.app_window
-            .on_request_pmu_update(|| send_action(Action::RequestPmuUpdate));
+        self.ui
+            .on_refresh_device_status(|| send_action(Action::RefreshDeviceStatus));
     }
 }
 
-pub fn send_action(a: Action) {
-    // use non-blocking try_send here because this function needs is called from sync code (the gui callbacks)
-    match ACTION.try_send(a) {
-        Ok(_) => {
-            // see loop in `fn run()` for dequeue
-        }
-        Err(a) => {
-            // this could happen because the controller is slow to respond or we are making too many requests
-            error!("user action queue full, could not add: {a:?}")
+fn send_action(action: Action) {
+    // The GUI callback is synchronous, so enqueue its hardware request without
+    // blocking the Slint event loop.
+    match ACTION.try_send(action) {
+        Ok(_) => {}
+        Err(action) => {
+            error!("user action queue full, could not add: {action:?}")
         }
     }
 }

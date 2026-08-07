@@ -1,5 +1,5 @@
 [workspace]
-members = ["app", "drivers", "slint-generated"]
+members = ["app", "bitcoin-ui", "drivers"]
 resolver = "2"
 
 [profile.dev]

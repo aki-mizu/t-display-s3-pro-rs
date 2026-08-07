@@ -1,6 +1,5 @@
 //! SY6970 power-management support for the T-Display-S3 Pro.
 
-use alloc::string::String;
 use drivers::sy6970::SY6970;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -41,30 +40,6 @@ impl Charger {
     /// Returns whether the PMU is actively charging the battery.
     pub async fn is_charging(&mut self) -> Result<bool, PmuError> {
         self.0.is_charging().await.map_err(|_| PmuError)
-    }
-
-    /// Enables battery charging.
-    pub async fn set_charge_enabled(&mut self) -> Result<(), PmuError> {
-        self.0.set_charge_enabled(true).await.map_err(|_| PmuError)
-    }
-
-    /// Disables battery charging.
-    pub async fn set_charge_disabled(&mut self) -> Result<(), PmuError> {
-        self.0.set_charge_enabled(false).await.map_err(|_| PmuError)
-    }
-
-    /// Builds a human-readable PMU report for the detail view.
-    pub async fn get_info(&mut self) -> Result<String, PmuError> {
-        let voltage = self
-            .0
-            .get_battery_voltage_mv()
-            .await
-            .map_err(|_| PmuError)?;
-        let status = self.0.get_charge_status().await.map_err(|_| PmuError)?;
-        let enabled = self.0.is_charge_enabled().await.map_err(|_| PmuError)?;
-        Ok(alloc::format!(
-            "PMU: SY6970\nBattery voltage: {voltage} mV\nCharge status: {status:?}\nCharging enabled: {enabled}"
-        ))
     }
 }
 

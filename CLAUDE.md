@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-This is an embedded Rust application for the LilyGO T-Display-S3 Pro with optional Camera Shield support. It integrates the ST7796 display, CST226SE touch controller, SY6970 power-management IC, camera-shield control, and a Slint GUI.
+This is an embedded Rust application for the LilyGO T-Display-S3 Pro with optional Camera Shield support. It integrates the ST7796 display, CST226SE touch controller, SY6970 power-management IC, camera-shield control, and a compact Slint Bitcoin-interface demo.
 
 **Target platform:** ESP32-S3 (`xtensa-esp32s3-none-elf`)
 **Toolchain:** ESP Rust toolchain (`channel = "esp"`)
@@ -64,8 +64,8 @@ cargo doc -p drivers --no-deps --open
 This Cargo workspace has three members:
 
 1. **`app/`** — the ESP32-S3 application binary
-2. **`drivers/`** — hardware driver library, including the CST226SE touch and SY6970 PMU drivers
-3. **`slint-generated/`** — Slint UI compilation package
+2. **`bitcoin-ui/`** — board-independent Bitcoin UI crate, including Slint compilation and presentation API
+3. **`drivers/`** — hardware driver library, including the CST226SE touch and SY6970 PMU drivers
 
 ### Core Application Architecture
 
@@ -77,6 +77,8 @@ The application uses Embassy's asynchronous task executor:
 - **`hardware/camera.rs`** configures Camera Shield power, clock, and sensor probing.
 
 UI callbacks are synchronous while the controller is asynchronous. `send_action()` bridges this boundary with non-blocking `try_send()`; an action is logged and dropped when the channel is full.
+
+The Bitcoin UI exposes account, receive-address, PSBT-review, and settings flows using local sample data. `bitcoin-ui` owns navigation, generated-Slint callbacks, user-facing text, typed `DeviceStatus` presentation, and `WalletUi`. `controller.rs` only turns the refresh request into PMU reads and publishes typed board facts.
 
 ### Hardware Modules
 
@@ -92,10 +94,22 @@ All I²C devices share a bus through `embassy_embedded_hal::shared_bus` with mut
 ### Display and UI
 
 - **UI framework:** Slint software renderer (RGB565)
-- **UI files:** `slint-generated/ui/`
-- **Build process:** Slint files compile through `slint-generated/build.rs`
+- **UI crate:** `bitcoin-ui/`
+- **UI files:** `bitcoin-ui/ui/`
+- **Build process:** Slint files compile through `bitcoin-ui/build.rs`
 - **Rendering:** `DisplayLineBuffer` renders one line at a time to limit memory use
 - **Touch mapping:** coordinates are transformed to match the landscape display orientation; see `render_task.rs`
+
+### Bitcoin Demo Scope
+
+The Bitcoin screens are intentionally not a real wallet. They must not gain an implicit claim of custody or transaction capability:
+
+- no private keys, seed phrases, or wallet persistence
+- no transaction signing, broadcast, or network access
+- no QR or PSBT parsing
+- no real receive address; the visible address is deliberately unusable sample text
+
+KeyOS is GPL-3.0-or-later, while this repository is MIT. Treat its Bitcoin app as a product-flow reference only: do not copy its source, Slint components, assets, generated code, translations, or build integration. Keep any future implementation original and sized for this board's 480×222 landscape display.
 
 ### Memory Configuration
 

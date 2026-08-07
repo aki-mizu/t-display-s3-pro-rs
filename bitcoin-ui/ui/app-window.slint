@@ -1,0 +1,399 @@
+import { BitcoinPalette, DetailRow, TabButton, WalletButton } from "common.slint";
+
+// A compact, local Bitcoin-wallet interface demonstration. It deliberately
+// contains no keys, networking, QR import, PSBT parsing, or signing logic.
+export component AppWindow inherits Window {
+    in-out property <int> battery-percentage: 0;
+    in-out property <bool> charging: false;
+    in-out property <int> current-screen: 0;
+    in-out property <string> account-name: "Savings account";
+    in-out property <string> account-balance: "0.02840000 BTC";
+    in-out property <string> fiat-balance: "$1,842.26 USD";
+    in-out property <string> receive-address: "bc1q-demo-address-not-usable";
+    in-out property <string> wallet-status: "Demo only: keys and signing are disabled.";
+    in-out property <string> device-status: "Board hardware status is loading.";
+
+    // Board-state refresh is the only UI action that needs firmware support.
+    callback request-device-status();
+
+    width: 480px;
+    height: 222px;
+    background: BitcoinPalette.page;
+
+    VerticalLayout {
+        padding: 0px;
+        spacing: 0px;
+
+        Rectangle {
+            height: 34px;
+            background: #0c1320;
+
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 8px;
+                spacing: 6px;
+
+                Rectangle {
+                    width: 25px;
+                    height: 25px;
+                    background: BitcoinPalette.accent;
+                    border-radius: 13px;
+
+                    Text {
+                        text: "BTC";
+                        color: #211204;
+                        font-size: 8px;
+                        font-weight: 900;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+
+                VerticalLayout {
+                    width: 319px;
+                    spacing: 0px;
+                    alignment: center;
+
+                    Text {
+                        text: "Bitcoin wallet";
+                        color: BitcoinPalette.text;
+                        font-size: 14px;
+                        font-weight: 700;
+                    }
+                    Text {
+                        text: "Local interface demo";
+                        color: BitcoinPalette.muted;
+                        font-size: 8px;
+                    }
+                }
+
+                Rectangle {
+                    width: 108px;
+                    height: 24px;
+                    background: BitcoinPalette.panel;
+                    border-color: BitcoinPalette.border;
+                    border-width: 1px;
+                    border-radius: 12px;
+
+                    Text {
+                        text: root.charging ? "Charging / " + root.battery-percentage + "%" : root.battery-percentage + "%";
+                        color: root.charging ? BitcoinPalette.success : BitcoinPalette.text;
+                        font-size: 11px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            height: 150px;
+            background: BitcoinPalette.page;
+
+            if root.current-screen == 0: VerticalLayout {
+                padding: 6px;
+                spacing: 2px;
+
+                Text {
+                    text: "Wallet overview";
+                    color: BitcoinPalette.muted;
+                    height: 12px;
+                    font-size: 10px;
+                    font-weight: 700;
+                }
+
+                HorizontalLayout {
+                    height: 50px;
+                    spacing: 8px;
+
+                    VerticalLayout {
+                        width: 250px;
+                        spacing: 0px;
+                        alignment: center;
+
+                        Text {
+                            text: root.account-balance;
+                            color: BitcoinPalette.text;
+                            font-size: 22px;
+                            font-weight: 800;
+                        }
+                        Text {
+                            text: root.fiat-balance + " (sample balance)";
+                            color: BitcoinPalette.muted;
+                            font-size: 10px;
+                        }
+                    }
+
+                    Rectangle {
+                        width: 206px;
+                        height: 50px;
+                        background: BitcoinPalette.panel;
+                        border-color: BitcoinPalette.border;
+                        border-width: 1px;
+                        border-radius: 7px;
+
+                        VerticalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 0px;
+                            alignment: center;
+
+                            Text {
+                                text: root.account-name;
+                                color: BitcoinPalette.text;
+                                font-size: 13px;
+                                font-weight: 700;
+                            }
+                            Text {
+                                text: "Account #0 / Native SegWit";
+                                color: BitcoinPalette.muted;
+                                font-size: 9px;
+                            }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    height: 30px;
+                    spacing: 8px;
+
+                    WalletButton {
+                        width: 228px;
+                        label: "Receive";
+                        primary: true;
+                        clicked => { root.current-screen = 1; }
+                    }
+                    WalletButton {
+                        width: 228px;
+                        label: "Review PSBT";
+                        primary: false;
+                        clicked => { root.current-screen = 2; }
+                    }
+                }
+
+                Rectangle {
+                    height: 24px;
+                    background: #172b42;
+                    border-radius: 5px;
+                    Text {
+                        text: root.wallet-status;
+                        color: #b9d8ff;
+                        font-size: 10px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                }
+            }
+
+            if root.current-screen == 1: VerticalLayout {
+                padding: 6px;
+                spacing: 2px;
+
+                Text {
+                    text: "Receive Bitcoin";
+                    color: BitcoinPalette.text;
+                    height: 18px;
+                    font-size: 16px;
+                    font-weight: 800;
+                }
+
+                HorizontalLayout {
+                    height: 70px;
+                    spacing: 8px;
+
+                    Rectangle {
+                        width: 66px;
+                        height: 66px;
+                        background: #f8fafc;
+                        border-radius: 4px;
+
+                        Text {
+                            text: "NO\nQR";
+                            color: #111827;
+                            font-size: 15px;
+                            font-weight: 800;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    VerticalLayout {
+                        width: 382px;
+                        spacing: 2px;
+
+                        Text {
+                            text: root.account-name + " / receive address";
+                            color: BitcoinPalette.text;
+                            font-size: 12px;
+                            font-weight: 700;
+                        }
+                        Text {
+                            text: root.receive-address;
+                            color: BitcoinPalette.accent;
+                            font-size: 11px;
+                            wrap: word-wrap;
+                        }
+                        Text {
+                            text: "Example only: never send funds to this address.";
+                            color: BitcoinPalette.muted;
+                            font-size: 9px;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+
+                WalletButton {
+                    label: "Back to wallet";
+                    primary: false;
+                    clicked => { root.current-screen = 0; }
+                }
+            }
+
+            if root.current-screen == 2: VerticalLayout {
+                padding: 6px;
+                spacing: 2px;
+
+                Text {
+                    text: "PSBT review";
+                    color: BitcoinPalette.text;
+                    height: 18px;
+                    font-size: 16px;
+                    font-weight: 800;
+                }
+
+                Rectangle {
+                    height: 60px;
+                    background: BitcoinPalette.panel;
+                    border-color: BitcoinPalette.border;
+                    border-width: 1px;
+                    border-radius: 7px;
+
+                    VerticalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 0px;
+                        alignment: center;
+
+                        DetailRow { label: "Send"; value: "0.00120000 BTC"; }
+                        DetailRow { label: "To"; value: "sample recipient"; }
+                        DetailRow { label: "Fee"; value: "0.00001200 BTC"; }
+                    }
+                }
+
+                HorizontalLayout {
+                    height: 30px;
+                    spacing: 8px;
+
+                    WalletButton {
+                        width: 228px;
+                        label: "Why signing is disabled";
+                        primary: true;
+                        clicked => {
+                            root.wallet-status = "Signing is disabled: this demo has no keys, PSBT parser, or network access.";
+                        }
+                    }
+                    WalletButton {
+                        width: 228px;
+                        label: "Back";
+                        primary: false;
+                        clicked => { root.current-screen = 0; }
+                    }
+                }
+
+                Text {
+                    text: root.wallet-status;
+                    color: BitcoinPalette.muted;
+                    height: 12px;
+                    font-size: 10px;
+                    horizontal-alignment: center;
+                    overflow: elide;
+                }
+            }
+
+            if root.current-screen == 3: VerticalLayout {
+                padding: 6px;
+                spacing: 2px;
+
+                Text {
+                    text: "Demo settings";
+                    color: BitcoinPalette.text;
+                    height: 18px;
+                    font-size: 16px;
+                    font-weight: 800;
+                }
+
+                Rectangle {
+                    height: 60px;
+                    background: BitcoinPalette.panel;
+                    border-color: BitcoinPalette.border;
+                    border-width: 1px;
+                    border-radius: 7px;
+
+                    VerticalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 0px;
+                        alignment: center;
+
+                        DetailRow { label: "Amount display"; value: "BTC"; }
+                        DetailRow { label: "Network"; value: "Not connected"; }
+                        DetailRow { label: "Private keys"; value: "Not available in demo"; }
+                    }
+                }
+
+                WalletButton {
+                    label: "Refresh board status";
+                    primary: false;
+                    clicked => { root.request-device-status(); }
+                }
+
+                Text {
+                    text: root.device-status;
+                    color: BitcoinPalette.muted;
+                    height: 12px;
+                    font-size: 9px;
+                    horizontal-alignment: center;
+                    overflow: elide;
+                }
+            }
+        }
+
+        Rectangle {
+            height: 38px;
+            background: #0c1320;
+            border-width: 0px;
+
+            HorizontalLayout {
+                padding: 0px;
+                spacing: 0px;
+
+                TabButton {
+                    width: 120px;
+                    label: "Wallet";
+                    active: root.current-screen == 0;
+                    clicked => { root.current-screen = 0; }
+                }
+                TabButton {
+                    width: 120px;
+                    label: "Receive";
+                    active: root.current-screen == 1;
+                    clicked => { root.current-screen = 1; }
+                }
+                TabButton {
+                    width: 120px;
+                    label: "Sign";
+                    active: root.current-screen == 2;
+                    clicked => { root.current-screen = 2; }
+                }
+                TabButton {
+                    width: 120px;
+                    label: "Settings";
+                    active: root.current-screen == 3;
+                    clicked => { root.current-screen = 3; }
+                }
+            }
+        }
+    }
+}

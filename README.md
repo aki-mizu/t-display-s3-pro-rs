@@ -8,9 +8,16 @@ An embedded Rust application for the LilyGO T-Display-S3 Pro and its optional Ca
 - **Touch**: CST226SE capacitive touch controller over I²C
 - **Power**: SY6970 battery charger and power-management IC
 - **Camera Shield**: sensor power, 20 MHz camera clock, a safely disabled torch, and SCCB sensor probing
-- **UI**: Slint embedded GUI with asynchronous rendering
+- **Bitcoin UI demo**: compact account, receive, and PSBT-review screens sized for the 480×222 landscape display
+- **UI**: Slint embedded GUI in the board-independent `bitcoin-ui` crate, with asynchronous rendering in `app`
 
 Camera capture and preview are not implemented yet. Camera Shields can ship with different image sensors, so capture requires a sensor-specific SCCB initialization sequence and DVP capture configuration.
+
+## Bitcoin Demo Safety
+
+The Bitcoin screens are a local interface demonstration, not a wallet. Their balances, transaction review, and receive address are deliberately sample data. The firmware has no private keys, wallet persistence, transaction signing, network access, QR import, or PSBT parsing. Do not send funds to the displayed example address.
+
+The UI is an original board-sized implementation. It does not include KeyOS source code, assets, or dependencies.
 
 ## Quick Start
 
@@ -50,6 +57,8 @@ The torch pin remains off until PWM brightness control is implemented, following
 ## Development
 
 For build instructions, architecture notes, and development guidelines, see [CLAUDE.md](./CLAUDE.md).
+
+The `bitcoin-ui` crate owns Slint components, screen navigation, UI actions, and presentation-state setters. The `app` crate owns the ESP32-S3 backend, display/touch integration, and hardware action handling.
 
 ## Contributing
 

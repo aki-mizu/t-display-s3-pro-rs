@@ -14,6 +14,7 @@ extern crate alloc;
 esp_bootloader_esp_idf::esp_app_desc!();
 
 use alloc::boxed::Box;
+use bitcoin_ui::{DeviceStatus, WalletUi};
 use controller::Controller;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
@@ -31,10 +32,9 @@ use esp_hal::peripherals::I2C0;
 use esp_hal::timer::timg::TimerGroup;
 use log::{error, info};
 use render_task::render_task;
+use slint::PhysicalSize;
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
-use slint::{ComponentHandle, PhysicalSize};
 use slint_backend::Backend;
-use slint_generated::AppWindow;
 use static_cell::StaticCell;
 
 // Hardware initialization modules
@@ -145,32 +145,19 @@ async fn main(spawner: Spawner) {
     spawner.spawn(render_task(window, display, touchpad).expect("Unable to spawn render task"));
 
     // Create and show the application window UI
-    let app_window = AppWindow::new().expect("UI init failed");
-    app_window.show().expect("UI show failed");
+    let ui = WalletUi::new().expect("UI init failed");
+    ui.show().expect("UI show failed");
 
-    app_window.set_camera_status(
-        match camera_sensor_address {
-            Some(address) => alloc::format!(
-                "Camera Shield detected at SCCB address 0x{address:02X}.\n\nThe installed sensor is intentionally not guessed: LilyGO ships multiple camera modules. Display, touch, PMU, camera clock, and SCCB detection are enabled; add the sensor-specific initialization sequence before starting LCD_CAM capture."
-            ),
-            None => "No Camera Shield sensor responded on SCCB.\n\nCheck the shield connection and power. The T-Display-S3 Pro still supports its display, touch screen, and PMU without the optional camera.".into(),
-        }
-        .into(),
-    );
+    ui.set_device_status(match camera_sensor_address {
+        Some(sccb_address) => DeviceStatus::CameraDetected { sccb_address },
+        None => DeviceStatus::CameraNotDetected,
+    });
 
     // Initialize the PMU for battery charging control
-    let mut pmu = { initialize_pmu(I2cDevice::new(i2c_bus)).await };
-    // Populate initial battery percentage on the main screen
-    if let Ok(percentage) = pmu.get_battery_percentage().await {
-        app_window.set_battery_percentage(percentage as i32);
-    }
-    // Set initial charging state
-    if let Ok(charging_enabled) = pmu.is_charging().await {
-        app_window.set_charging(charging_enabled);
-    }
+    let pmu = { initialize_pmu(I2cDevice::new(i2c_bus)).await };
 
     // Start the main event loop in the controller with the UI and PMU
-    let mut controller = Controller::new(&app_window, pmu);
+    let mut controller = Controller::new(&ui, pmu);
     controller.run().await;
 }
 
