@@ -29,6 +29,7 @@ use esp_hal::gpio::{AnyPin, Level, Output, OutputConfig, Pin};
 use esp_hal::i2c::master::I2c;
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::peripherals::I2C0;
+use esp_hal::rng::TrngSource;
 use esp_hal::timer::timg::TimerGroup;
 use log::{error, info};
 use render_task::render_task;
@@ -53,6 +54,12 @@ async fn main(spawner: Spawner) {
 
     // Initialize peripherals and configure the CPU clock
     let peripherals = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::_240MHz));
+
+    // Keep ADC-backed hardware entropy enabled for the entire application.
+    // The BIP39 UI requests random word indices through the controller; it
+    // never receives raw random bytes or owns this board-specific source.
+    let trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
+    info!("ADC-backed TRNG enabled for BIP39 generation");
 
     // Reserve memory for dynamic allocations
     esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 73744);
@@ -159,6 +166,10 @@ async fn main(spawner: Spawner) {
     // Start the main event loop in the controller with the UI and PMU
     let mut controller = Controller::new(&ui, pmu);
     controller.run().await;
+
+    // Retain the ADC entropy source until every short-lived `Trng` user from
+    // the controller has been dropped.
+    drop(trng_source);
 }
 
 /// Type alias for the shared I2C bus wrapped in a Mutex

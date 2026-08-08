@@ -1,0 +1,8 @@
+[package]
+name = "bip39-last-word"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bip39 = { version = "2.2.2", default-features = false }
+bitcoin_hashes = { version = "0.14.101", default-features = false }

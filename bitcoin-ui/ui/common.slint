@@ -1,5 +1,3 @@
-// Shared, local-only components for the compact Bitcoin wallet UI demo.
-
 export global BitcoinPalette {
     out property <color> page: #101827;
     out property <color> panel: #192235;
@@ -8,23 +6,22 @@ export global BitcoinPalette {
     out property <color> text: #f8fafc;
     out property <color> muted: #9aa8bd;
     out property <color> accent: #f7931a;
-    out property <color> success: #55c48b;
 }
 
-export component WalletButton inherits Rectangle {
+export component KeyButton inherits Rectangle {
     in-out property <string> label: "";
-    in-out property <bool> primary: false;
+    in-out property <bool> active: false;
     callback clicked();
 
-    height: 30px;
-    border-radius: 6px;
-    border-width: primary ? 0px : 1px;
-    border-color: BitcoinPalette.border;
-    background: primary ? BitcoinPalette.accent : BitcoinPalette.panel-highlight;
+    height: 28px;
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: active ? BitcoinPalette.accent : BitcoinPalette.border;
+    background: active ? BitcoinPalette.accent : BitcoinPalette.panel-highlight;
 
     Text {
         text: root.label;
-        color: primary ? #211204 : BitcoinPalette.text;
+        color: active ? #211204 : BitcoinPalette.text;
         font-size: 12px;
         font-weight: 700;
         horizontal-alignment: center;
@@ -32,61 +29,4 @@ export component WalletButton inherits Rectangle {
     }
 
     TouchArea { clicked => { root.clicked(); } }
-}
-
-export component TabButton inherits Rectangle {
-    in-out property <string> label: "";
-    in-out property <bool> active: false;
-    callback clicked();
-
-    height: 38px;
-    background: active ? BitcoinPalette.panel-highlight : BitcoinPalette.page;
-    border-width: active ? 0px : 0px;
-
-    Rectangle {
-        visible: root.active;
-        width: parent.width - 24px;
-        height: 2px;
-        x: 12px;
-        y: 3px;
-        background: BitcoinPalette.accent;
-        border-radius: 1px;
-    }
-
-    Text {
-        text: root.label;
-        color: active ? BitcoinPalette.text : BitcoinPalette.muted;
-        font-size: 11px;
-        font-weight: active ? 700 : 500;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-
-    TouchArea { clicked => { root.clicked(); } }
-}
-
-export component DetailRow inherits Rectangle {
-    in-out property <string> label: "";
-    in-out property <string> value: "";
-
-    height: 22px;
-    border-width: 0px;
-
-    Text {
-        text: root.label;
-        color: BitcoinPalette.muted;
-        font-size: 11px;
-        vertical-alignment: center;
-    }
-
-    Text {
-        text: root.value;
-        x: parent.width * 0.42;
-        width: parent.width * 0.58;
-        color: BitcoinPalette.text;
-        font-size: 11px;
-        horizontal-alignment: right;
-        vertical-alignment: center;
-        overflow: elide;
-    }
 }

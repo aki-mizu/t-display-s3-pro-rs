@@ -15,6 +15,12 @@ pub const RAW_TOUCH_REPORT_LEN: usize = 28;
 /// Maximum number of touches represented by one report.
 pub const MAX_TOUCH_POINTS: u8 = 5;
 
+/// CST226SE point-state value meaning an active finger contact.
+///
+/// The controller also sends a point record for a lift; its state is any
+/// value other than this one and must not be interpreted as another press.
+pub const TOUCH_STATUS_PRESSED: u8 = 0x06;
+
 const REPORT_VALID_MARKER: u8 = 0xAB;
 const HOME_BUTTON_MARKER: u8 = 0x80;
 const FIRMWARE_CHECKCODE_PREFIX: u32 = 0xCACA_0000;
@@ -105,6 +111,17 @@ pub(crate) fn parse_first_point(report: &[u8; RAW_TOUCH_REPORT_LEN]) -> Option<T
     })
 }
 
+pub(crate) fn has_valid_firmware_checkcode(checkcode: [u8; 4]) -> bool {
+    (u32::from_le_bytes(checkcode) & 0xFFFF_0000) == FIRMWARE_CHECKCODE_PREFIX
+}
+
+/// Returns whether a point record represents an active finger contact.
+pub const fn is_touch_pressed(status: u8) -> bool {
+    status == TOUCH_STATUS_PRESSED
+}
+
+/// The vendor driver acknowledges reports with an invalid (including zero)
+/// point count so the controller can publish the next report.
 pub(crate) fn should_acknowledge_empty_report(report: &[u8; RAW_TOUCH_REPORT_LEN]) -> bool {
     if report[6] != REPORT_VALID_MARKER
         || report[0] == REPORT_VALID_MARKER
@@ -115,10 +132,6 @@ pub(crate) fn should_acknowledge_empty_report(report: &[u8; RAW_TOUCH_REPORT_LEN
 
     let points = report[5] & 0x7F;
     points == 0 || points > MAX_TOUCH_POINTS
-}
-
-pub(crate) fn has_valid_firmware_checkcode(checkcode: [u8; 4]) -> bool {
-    (u32::from_le_bytes(checkcode) & 0xFFFF_0000) == FIRMWARE_CHECKCODE_PREFIX
 }
 
 #[cfg(test)]
@@ -150,28 +163,49 @@ mod tests {
     }
 
     #[test]
-    fn ignores_non_touch_reports() {
+    fn ignores_home_button_reports() {
         let mut report = [0u8; RAW_TOUCH_REPORT_LEN];
         report[5] = HOME_BUTTON_MARKER;
         report[6] = REPORT_VALID_MARKER;
 
         assert_eq!(parse_first_point(&report), None);
-        assert!(!should_acknowledge_empty_report(&report));
     }
 
     #[test]
-    fn acknowledges_empty_valid_reports() {
+    fn parses_a_zero_id_lift_record_for_the_input_layer() {
         let mut report = [0u8; RAW_TOUCH_REPORT_LEN];
+        report[0] = 0;
+        report[1] = 0x12;
+        report[2] = 0x34;
+        report[3] = 0x56;
+        report[5] = 0x01;
         report[6] = REPORT_VALID_MARKER;
 
-        assert_eq!(parse_first_point(&report), None);
-        assert!(should_acknowledge_empty_report(&report));
+        assert_eq!(
+            parse_first_point(&report),
+            Some(TouchPoint {
+                points: 1,
+                id: 0,
+                status: 0,
+                x: 0x125,
+                y: 0x346,
+                pressure: 0,
+            })
+        );
+        assert!(!should_acknowledge_empty_report(&report));
     }
 
     #[test]
     fn recognizes_the_controller_firmware_checkcode() {
         assert!(has_valid_firmware_checkcode([0x12, 0x34, 0xCA, 0xCA]));
         assert!(!has_valid_firmware_checkcode([0x12, 0x34, 0x00, 0xCA]));
+    }
+
+    #[test]
+    fn distinguishes_pressed_and_lifted_point_records() {
+        assert!(is_touch_pressed(TOUCH_STATUS_PRESSED));
+        assert!(!is_touch_pressed(0));
+        assert!(!is_touch_pressed(0x07));
     }
 }
 

@@ -1,185 +1,227 @@
-import { BitcoinPalette, DetailRow, TabButton, WalletButton } from "common.slint";
+import { BitcoinPalette, KeyButton } from "common.slint";
 
-// A compact, local Bitcoin-wallet interface demonstration. It deliberately
-// contains no keys, networking, QR import, PSBT parsing, or signing logic.
+// A local-only BIP39 final-word helper. It never derives keys, signs, or
+// persists a mnemonic; the Rust bridge retains only word-list indices.
 export component AppWindow inherits Window {
+    // Retained for the board wrapper's existing typed status API. These facts
+    // are intentionally not rendered in the BIP39-only interface.
     in-out property <int> battery-percentage: 0;
     in-out property <bool> charging: false;
-    in-out property <int> current-screen: 0;
-    in-out property <string> account-name: "Savings account";
-    in-out property <string> account-balance: "0.02840000 BTC";
-    in-out property <string> fiat-balance: "$1,842.26 USD";
-    in-out property <string> receive-address: "bc1q-demo-address-not-usable";
-    in-out property <string> wallet-status: "Demo only: keys and signing are disabled.";
-    in-out property <string> device-status: "Board hardware status is loading.";
+    in-out property <string> device-status: "";
 
-    // Board-state refresh is the only UI action that needs firmware support.
+    in-out property <int> current-screen: 0;
+    in-out property <int> mnemonic-word-count: 0;
+    in-out property <string> mnemonic-prefix: "";
+    in-out property <string> mnemonic-entry: "";
+    in-out property <string> mnemonic-message: "Enter word 1 of 11.";
+    in-out property <bool> mnemonic-can-commit: false;
+    in-out property <string> candidate-word: "";
+    in-out property <int> candidate-index: 0;
+    in-out property <string> entropy-bits-label: "0000000";
+    in-out property <bool> entropy-bit-64: false;
+    in-out property <bool> entropy-bit-32: false;
+    in-out property <bool> entropy-bit-16: false;
+    in-out property <bool> entropy-bit-8: false;
+    in-out property <bool> entropy-bit-4: false;
+    in-out property <bool> entropy-bit-2: false;
+    in-out property <bool> entropy-bit-1: false;
+
     callback request-device-status();
+    callback mnemonic-key(int);
+    callback mnemonic-backspace();
+    callback mnemonic-commit();
+    callback mnemonic-reset();
+    callback request-random-words();
+    callback entropy-toggle(int);
+    callback entropy-confirm();
 
     width: 480px;
     height: 222px;
     background: BitcoinPalette.page;
 
-    VerticalLayout {
-        padding: 0px;
-        spacing: 0px;
+    Rectangle {
+        width: 480px;
+        height: 222px;
+        background: BitcoinPalette.page;
 
-        Rectangle {
-            height: 34px;
-            background: #0c1320;
+        if root.current-screen == 0: VerticalLayout {
+            padding: 3px;
+            spacing: 2px;
 
-            HorizontalLayout {
-                padding-left: 8px;
-                padding-right: 8px;
-                spacing: 6px;
+            Text {
+                text: "BIP39 final word";
+                color: BitcoinPalette.text;
+                height: 15px;
+                font-size: 15px;
+                font-weight: 800;
+                horizontal-alignment: center;
+            }
 
-                Rectangle {
-                    width: 25px;
-                    height: 25px;
-                    background: BitcoinPalette.accent;
-                    border-radius: 13px;
+            Text {
+                text: root.mnemonic-message;
+                color: BitcoinPalette.muted;
+                height: 12px;
+                font-size: 9px;
+                horizontal-alignment: center;
+                overflow: elide;
+            }
 
-                    Text {
-                        text: "BTC";
-                        color: #211204;
-                        font-size: 8px;
-                        font-weight: 900;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
-                    }
-                }
+            Rectangle {
+                height: 40px;
+                background: BitcoinPalette.panel;
+                border-color: BitcoinPalette.border;
+                border-width: 1px;
+                border-radius: 6px;
 
-                VerticalLayout {
-                    width: 319px;
-                    spacing: 0px;
-                    alignment: center;
-
-                    Text {
-                        text: "Bitcoin wallet";
-                        color: BitcoinPalette.text;
-                        font-size: 14px;
-                        font-weight: 700;
-                    }
-                    Text {
-                        text: "Local interface demo";
-                        color: BitcoinPalette.muted;
-                        font-size: 8px;
-                    }
-                }
-
-                Rectangle {
-                    width: 108px;
-                    height: 24px;
-                    background: BitcoinPalette.panel;
-                    border-color: BitcoinPalette.border;
-                    border-width: 1px;
-                    border-radius: 12px;
+                HorizontalLayout {
+                    padding-left: 6px;
+                    padding-right: 4px;
+                    padding-top: 2px;
+                    padding-bottom: 2px;
+                    spacing: 3px;
 
                     Text {
-                        text: root.charging ? "Charging / " + root.battery-percentage + "%" : root.battery-percentage + "%";
-                        color: root.charging ? BitcoinPalette.success : BitcoinPalette.text;
+                        width: 70px;
+                        text: root.mnemonic-prefix == "" ? "Input: —" : "Input: " + root.mnemonic-prefix;
+                        color: BitcoinPalette.accent;
                         font-size: 11px;
                         font-weight: 700;
-                        horizontal-alignment: center;
                         vertical-alignment: center;
+                        overflow: elide;
                     }
+                    Text {
+                        width: 211px;
+                        text: root.mnemonic-entry;
+                        color: BitcoinPalette.text;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    KeyButton {
+                        width: 104px;
+                        height: 36px;
+                        label: "Use word";
+                        active: root.mnemonic-can-commit;
+                        clicked => { root.mnemonic-commit(); }
+                    }
+                    KeyButton {
+                        width: 70px;
+                        height: 36px;
+                        label: "Reset";
+                        clicked => { root.mnemonic-reset(); }
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                height: 44px;
+                padding-left: 2px;
+                padding-right: 2px;
+                spacing: 0px;
+
+                KeyButton { width: 47px; height: 44px; label: "Q"; clicked => { root.mnemonic-key(16); } }
+                KeyButton { width: 47px; height: 44px; label: "W"; clicked => { root.mnemonic-key(22); } }
+                KeyButton { width: 47px; height: 44px; label: "E"; clicked => { root.mnemonic-key(4); } }
+                KeyButton { width: 47px; height: 44px; label: "R"; clicked => { root.mnemonic-key(17); } }
+                KeyButton { width: 47px; height: 44px; label: "T"; clicked => { root.mnemonic-key(19); } }
+                KeyButton { width: 47px; height: 44px; label: "Y"; clicked => { root.mnemonic-key(24); } }
+                KeyButton { width: 47px; height: 44px; label: "U"; clicked => { root.mnemonic-key(20); } }
+                KeyButton { width: 47px; height: 44px; label: "I"; clicked => { root.mnemonic-key(8); } }
+                KeyButton { width: 47px; height: 44px; label: "O"; clicked => { root.mnemonic-key(14); } }
+                KeyButton { width: 47px; height: 44px; label: "P"; clicked => { root.mnemonic-key(15); } }
+            }
+
+            HorizontalLayout {
+                height: 44px;
+                padding-left: 3px;
+                padding-right: 3px;
+                spacing: 0px;
+
+                KeyButton { width: 52px; height: 44px; label: "A"; clicked => { root.mnemonic-key(0); } }
+                KeyButton { width: 52px; height: 44px; label: "S"; clicked => { root.mnemonic-key(18); } }
+                KeyButton { width: 52px; height: 44px; label: "D"; clicked => { root.mnemonic-key(3); } }
+                KeyButton { width: 52px; height: 44px; label: "F"; clicked => { root.mnemonic-key(5); } }
+                KeyButton { width: 52px; height: 44px; label: "G"; clicked => { root.mnemonic-key(6); } }
+                KeyButton { width: 52px; height: 44px; label: "H"; clicked => { root.mnemonic-key(7); } }
+                KeyButton { width: 52px; height: 44px; label: "J"; clicked => { root.mnemonic-key(9); } }
+                KeyButton { width: 52px; height: 44px; label: "K"; clicked => { root.mnemonic-key(10); } }
+                KeyButton { width: 52px; height: 44px; label: "L"; clicked => { root.mnemonic-key(11); } }
+            }
+
+            HorizontalLayout {
+                height: 44px;
+                padding-left: 1px;
+                padding-right: 1px;
+                spacing: 0px;
+
+                KeyButton { width: 42px; height: 44px; label: "Z"; clicked => { root.mnemonic-key(25); } }
+                KeyButton { width: 42px; height: 44px; label: "X"; clicked => { root.mnemonic-key(23); } }
+                KeyButton { width: 42px; height: 44px; label: "C"; clicked => { root.mnemonic-key(2); } }
+                KeyButton { width: 42px; height: 44px; label: "V"; clicked => { root.mnemonic-key(21); } }
+                KeyButton { width: 42px; height: 44px; label: "B"; clicked => { root.mnemonic-key(1); } }
+                KeyButton { width: 42px; height: 44px; label: "N"; clicked => { root.mnemonic-key(13); } }
+                KeyButton { width: 42px; height: 44px; label: "M"; clicked => { root.mnemonic-key(12); } }
+                KeyButton {
+                    width: 82px;
+                    height: 44px;
+                    label: "Back";
+                    clicked => { root.mnemonic-backspace(); }
+                }
+                KeyButton {
+                    width: 96px;
+                    height: 44px;
+                    label: "Random 11";
+                    clicked => { root.request-random-words(); }
                 }
             }
         }
 
-        Rectangle {
-            height: 150px;
-            background: BitcoinPalette.page;
+        if root.current-screen == 1: VerticalLayout {
+            padding: 3px;
+            spacing: 2px;
 
-            if root.current-screen == 0: VerticalLayout {
-                padding: 6px;
-                spacing: 2px;
+            Text {
+                text: "Choose the seven entropy bits";
+                color: BitcoinPalette.text;
+                height: 15px;
+                font-size: 15px;
+                font-weight: 800;
+                horizontal-alignment: center;
+            }
 
-                Text {
-                    text: "Wallet overview";
-                    color: BitcoinPalette.muted;
-                    height: 12px;
-                    font-size: 10px;
-                    font-weight: 700;
-                }
+            Text {
+                text: "Eleven words leave 128 valid final-word candidates.";
+                color: BitcoinPalette.muted;
+                height: 12px;
+                font-size: 9px;
+                horizontal-alignment: center;
+                overflow: elide;
+            }
 
-                HorizontalLayout {
-                    height: 50px;
-                    spacing: 8px;
+            Rectangle {
+                height: 36px;
+                background: BitcoinPalette.panel;
+                border-color: BitcoinPalette.border;
+                border-width: 1px;
+                border-radius: 6px;
 
-                    VerticalLayout {
-                        width: 250px;
-                        spacing: 0px;
-                        alignment: center;
+                VerticalLayout {
+                    padding: 3px;
+                    spacing: 1px;
 
-                        Text {
-                            text: root.account-balance;
-                            color: BitcoinPalette.text;
-                            font-size: 22px;
-                            font-weight: 800;
-                        }
-                        Text {
-                            text: root.fiat-balance + " (sample balance)";
-                            color: BitcoinPalette.muted;
-                            font-size: 10px;
-                        }
-                    }
-
-                    Rectangle {
-                        width: 206px;
-                        height: 50px;
-                        background: BitcoinPalette.panel;
-                        border-color: BitcoinPalette.border;
-                        border-width: 1px;
-                        border-radius: 7px;
-
-                        VerticalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 0px;
-                            alignment: center;
-
-                            Text {
-                                text: root.account-name;
-                                color: BitcoinPalette.text;
-                                font-size: 13px;
-                                font-weight: 700;
-                            }
-                            Text {
-                                text: "Account #0 / Native SegWit";
-                                color: BitcoinPalette.muted;
-                                font-size: 9px;
-                            }
-                        }
-                    }
-                }
-
-                HorizontalLayout {
-                    height: 30px;
-                    spacing: 8px;
-
-                    WalletButton {
-                        width: 228px;
-                        label: "Receive";
-                        primary: true;
-                        clicked => { root.current-screen = 1; }
-                    }
-                    WalletButton {
-                        width: 228px;
-                        label: "Review PSBT";
-                        primary: false;
-                        clicked => { root.current-screen = 2; }
-                    }
-                }
-
-                Rectangle {
-                    height: 24px;
-                    background: #172b42;
-                    border-radius: 5px;
                     Text {
-                        text: root.wallet-status;
-                        color: #b9d8ff;
-                        font-size: 10px;
+                        height: 12px;
+                        text: "Selected bits: " + root.entropy-bits-label;
+                        color: BitcoinPalette.accent;
+                        font-size: 11px;
+                        font-weight: 800;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: root.candidate-word == "" ? "Final word is not revealed." : "Candidate " + (root.candidate-index + 1) + " of 128: " + root.candidate-word;
+                        color: BitcoinPalette.text;
+                        font-size: 12px;
+                        font-weight: 800;
                         horizontal-alignment: center;
                         vertical-alignment: center;
                         overflow: elide;
@@ -187,211 +229,53 @@ export component AppWindow inherits Window {
                 }
             }
 
-            if root.current-screen == 1: VerticalLayout {
-                padding: 6px;
-                spacing: 2px;
-
-                Text {
-                    text: "Receive Bitcoin";
-                    color: BitcoinPalette.text;
-                    height: 18px;
-                    font-size: 16px;
-                    font-weight: 800;
-                }
-
-                HorizontalLayout {
-                    height: 70px;
-                    spacing: 8px;
-
-                    Rectangle {
-                        width: 66px;
-                        height: 66px;
-                        background: #f8fafc;
-                        border-radius: 4px;
-
-                        Text {
-                            text: "NO\nQR";
-                            color: #111827;
-                            font-size: 15px;
-                            font-weight: 800;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
-                        }
-                    }
-
-                    VerticalLayout {
-                        width: 382px;
-                        spacing: 2px;
-
-                        Text {
-                            text: root.account-name + " / receive address";
-                            color: BitcoinPalette.text;
-                            font-size: 12px;
-                            font-weight: 700;
-                        }
-                        Text {
-                            text: root.receive-address;
-                            color: BitcoinPalette.accent;
-                            font-size: 11px;
-                            wrap: word-wrap;
-                        }
-                        Text {
-                            text: "Example only: never send funds to this address.";
-                            color: BitcoinPalette.muted;
-                            font-size: 9px;
-                            wrap: word-wrap;
-                        }
-                    }
-                }
-
-                WalletButton {
-                    label: "Back to wallet";
-                    primary: false;
-                    clicked => { root.current-screen = 0; }
-                }
-            }
-
-            if root.current-screen == 2: VerticalLayout {
-                padding: 6px;
-                spacing: 2px;
-
-                Text {
-                    text: "PSBT review";
-                    color: BitcoinPalette.text;
-                    height: 18px;
-                    font-size: 16px;
-                    font-weight: 800;
-                }
-
-                Rectangle {
-                    height: 60px;
-                    background: BitcoinPalette.panel;
-                    border-color: BitcoinPalette.border;
-                    border-width: 1px;
-                    border-radius: 7px;
-
-                    VerticalLayout {
-                        padding-left: 8px;
-                        padding-right: 8px;
-                        spacing: 0px;
-                        alignment: center;
-
-                        DetailRow { label: "Send"; value: "0.00120000 BTC"; }
-                        DetailRow { label: "To"; value: "sample recipient"; }
-                        DetailRow { label: "Fee"; value: "0.00001200 BTC"; }
-                    }
-                }
-
-                HorizontalLayout {
-                    height: 30px;
-                    spacing: 8px;
-
-                    WalletButton {
-                        width: 228px;
-                        label: "Why signing is disabled";
-                        primary: true;
-                        clicked => {
-                            root.wallet-status = "Signing is disabled: this demo has no keys, PSBT parser, or network access.";
-                        }
-                    }
-                    WalletButton {
-                        width: 228px;
-                        label: "Back";
-                        primary: false;
-                        clicked => { root.current-screen = 0; }
-                    }
-                }
-
-                Text {
-                    text: root.wallet-status;
-                    color: BitcoinPalette.muted;
-                    height: 12px;
-                    font-size: 10px;
-                    horizontal-alignment: center;
-                    overflow: elide;
-                }
-            }
-
-            if root.current-screen == 3: VerticalLayout {
-                padding: 6px;
-                spacing: 2px;
-
-                Text {
-                    text: "Demo settings";
-                    color: BitcoinPalette.text;
-                    height: 18px;
-                    font-size: 16px;
-                    font-weight: 800;
-                }
-
-                Rectangle {
-                    height: 60px;
-                    background: BitcoinPalette.panel;
-                    border-color: BitcoinPalette.border;
-                    border-width: 1px;
-                    border-radius: 7px;
-
-                    VerticalLayout {
-                        padding-left: 8px;
-                        padding-right: 8px;
-                        spacing: 0px;
-                        alignment: center;
-
-                        DetailRow { label: "Amount display"; value: "BTC"; }
-                        DetailRow { label: "Network"; value: "Not connected"; }
-                        DetailRow { label: "Private keys"; value: "Not available in demo"; }
-                    }
-                }
-
-                WalletButton {
-                    label: "Refresh board status";
-                    primary: false;
-                    clicked => { root.request-device-status(); }
-                }
-
-                Text {
-                    text: root.device-status;
-                    color: BitcoinPalette.muted;
-                    height: 12px;
-                    font-size: 9px;
-                    horizontal-alignment: center;
-                    overflow: elide;
-                }
-            }
-        }
-
-        Rectangle {
-            height: 38px;
-            background: #0c1320;
-            border-width: 0px;
-
             HorizontalLayout {
-                padding: 0px;
+                height: 46px;
+                padding-left: 1px;
+                padding-right: 1px;
                 spacing: 0px;
 
-                TabButton {
-                    width: 120px;
-                    label: "Wallet";
-                    active: root.current-screen == 0;
+                KeyButton { width: 118px; height: 46px; label: "64"; active: root.entropy-bit-64; clicked => { root.entropy-toggle(6); } }
+                KeyButton { width: 118px; height: 46px; label: "32"; active: root.entropy-bit-32; clicked => { root.entropy-toggle(5); } }
+                KeyButton { width: 118px; height: 46px; label: "16"; active: root.entropy-bit-16; clicked => { root.entropy-toggle(4); } }
+                KeyButton { width: 118px; height: 46px; label: "8"; active: root.entropy-bit-8; clicked => { root.entropy-toggle(3); } }
+            }
+
+            HorizontalLayout {
+                height: 46px;
+                padding-left: 3px;
+                padding-right: 3px;
+                spacing: 0px;
+
+                KeyButton { width: 156px; height: 46px; label: "4"; active: root.entropy-bit-4; clicked => { root.entropy-toggle(2); } }
+                KeyButton { width: 156px; height: 46px; label: "2"; active: root.entropy-bit-2; clicked => { root.entropy-toggle(1); } }
+                KeyButton { width: 156px; height: 46px; label: "1"; active: root.entropy-bit-1; clicked => { root.entropy-toggle(0); } }
+            }
+
+            HorizontalLayout {
+                height: 44px;
+                padding-left: 1px;
+                padding-right: 1px;
+                spacing: 2px;
+
+                KeyButton {
+                    width: 156px;
+                    height: 44px;
+                    label: "Edit words";
                     clicked => { root.current-screen = 0; }
                 }
-                TabButton {
-                    width: 120px;
-                    label: "Receive";
-                    active: root.current-screen == 1;
-                    clicked => { root.current-screen = 1; }
+                KeyButton {
+                    width: 156px;
+                    height: 44px;
+                    label: "Reveal final word";
+                    active: true;
+                    clicked => { root.entropy-confirm(); }
                 }
-                TabButton {
-                    width: 120px;
-                    label: "Sign";
-                    active: root.current-screen == 2;
-                    clicked => { root.current-screen = 2; }
-                }
-                TabButton {
-                    width: 120px;
-                    label: "Settings";
-                    active: root.current-screen == 3;
-                    clicked => { root.current-screen = 3; }
+                KeyButton {
+                    width: 156px;
+                    height: 44px;
+                    label: "Start over";
+                    clicked => { root.mnemonic-reset(); root.current-screen = 0; }
                 }
             }
         }

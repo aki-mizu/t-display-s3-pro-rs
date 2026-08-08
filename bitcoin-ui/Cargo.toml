@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bip39-last-word = { path = "../bip39-last-word" }
 slint = { version = "1.16.1", default-features = false, features = [
     "libm",
     "unsafe-single-threaded",

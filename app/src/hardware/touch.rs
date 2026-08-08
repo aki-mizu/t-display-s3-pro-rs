@@ -3,7 +3,7 @@
 //! The T-Display-S3 Pro uses a CST226SE. Keep its controller-specific protocol
 //! here and expose a small common event shape to the renderer.
 
-use drivers::cst226se::CST226SE;
+use drivers::cst226se::{CST226SE, is_touch_pressed};
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::Delay;
@@ -55,23 +55,18 @@ pub async fn initialize_touchpad(
     Ok(touchpad)
 }
 
-/// Returns whether the controller has asserted its active-low interrupt.
-pub fn is_touch_available(touchpad: &mut Touchpad) -> Result<bool, TouchpadError> {
-    touchpad.is_touch_available().map_err(|_| TouchpadError)
-}
-
 /// Reads one touch report using the selected board's controller protocol.
 pub async fn read_touch(touchpad: &mut Touchpad) -> Result<TouchPoint, TouchpadError> {
     match touchpad.read_touch().await.map_err(|_| TouchpadError)? {
-        Some(point) => Ok(TouchPoint {
+        // CST226SE reports a lifted finger as a point record too. Its status
+        // low nibble is `0x06` only while the finger is actively down.
+        Some(point) if is_touch_pressed(point.status) => Ok(TouchPoint {
             points: point.points,
-            // The CST226SE report does not provide a portable down/contact
-            // mapping. The renderer derives it from its previous state.
             event: TouchEvent::Contact,
             x: point.x,
             y: point.y,
         }),
-        None => Ok(TouchPoint {
+        Some(_) | None => Ok(TouchPoint {
             points: 0,
             event: TouchEvent::Up,
             x: 0,
