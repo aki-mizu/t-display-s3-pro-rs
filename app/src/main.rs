@@ -70,6 +70,17 @@ async fn main(spawner: Spawner) {
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
     info!("Embassy initialized!");
 
+    // Bring up the PMU before the display, camera, and touch controller add
+    // their startup load. In particular, this lets the USB-only safeguard
+    // disable SY6970 charging before a disconnected battery can brown out the
+    // system power path.
+    let i2c_bus = initialize_i2c(
+        peripherals.I2C0,
+        peripherals.GPIO5.degrade(),
+        peripherals.GPIO6.degrade(),
+    );
+    let pmu = initialize_pmu(I2cDevice::new(i2c_bus)).await;
+
     // LilyGO specifies OPI PSRAM for the T-Display-S3 Pro.
     psram_allocator!(
         peripherals.PSRAM,
@@ -99,13 +110,6 @@ async fn main(spawner: Spawner) {
     display
         .clear(Rgb565::new(0, 63, 0))
         .expect("Failed to draw display bring-up splash");
-
-    // I2C is shared by touch, PMU, and the optional Camera Shield SCCB bus.
-    let i2c_bus = initialize_i2c(
-        peripherals.I2C0,
-        peripherals.GPIO5.degrade(),
-        peripherals.GPIO6.degrade(),
-    );
 
     // The optional Camera Shield uses the same I2C bus for SCCB.
     let _camera_shield = initialize_camera_shield(
@@ -159,9 +163,6 @@ async fn main(spawner: Spawner) {
         Some(sccb_address) => DeviceStatus::CameraDetected { sccb_address },
         None => DeviceStatus::CameraNotDetected,
     });
-
-    // Initialize the PMU for battery charging control
-    let pmu = { initialize_pmu(I2cDevice::new(i2c_bus)).await };
 
     // Start the main event loop in the controller with the UI and PMU
     let mut controller = Controller::new(&ui, pmu);

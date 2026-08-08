@@ -20,7 +20,17 @@ const BATTERY_VOLTAGE_BASE_MV: u16 = 2304;
 const BATTERY_VOLTAGE_STEP_MV: u16 = 20;
 
 fn battery_voltage_from_register(value: u8) -> u16 {
-    BATTERY_VOLTAGE_BASE_MV + u16::from(value & BATTERY_VOLTAGE_MASK) * BATTERY_VOLTAGE_STEP_MV
+    let code = value & BATTERY_VOLTAGE_MASK;
+
+    // LilyGO's reference SY6970 driver treats an all-zero ADC code as no
+    // usable battery reading rather than the nominal ADC base voltage. Mirror
+    // that board-level convention so firmware can apply LilyGO's USB-only
+    // power-path workaround.
+    if code == 0 {
+        0
+    } else {
+        BATTERY_VOLTAGE_BASE_MV + u16::from(code) * BATTERY_VOLTAGE_STEP_MV
+    }
 }
 
 fn charge_status_from_register(value: u8) -> ChargeStatus {
@@ -131,7 +141,7 @@ mod tests {
 
     #[test]
     fn decodes_battery_voltage_adc_register() {
-        assert_eq!(battery_voltage_from_register(0x00), 2304);
+        assert_eq!(battery_voltage_from_register(0x00), 0);
         assert_eq!(battery_voltage_from_register(0x01), 2324);
         assert_eq!(battery_voltage_from_register(0xFF), 4844);
     }

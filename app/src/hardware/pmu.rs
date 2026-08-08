@@ -3,12 +3,20 @@
 use drivers::sy6970::SY6970;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_time::Timer;
 use esp_hal::Async;
 use esp_hal::i2c::master::I2c;
 use log::info;
 
 /// I2C device type used by the PMU.
 type PmuI2c = I2cDevice<'static, CriticalSectionRawMutex, I2c<'static, Async>>;
+
+// LilyGO's board example uses this threshold to distinguish its disconnected
+// battery input from a one-cell pack. The SY6970 lacks a dedicated
+// battery-present status bit, so this is necessarily a board-specific
+// best-effort check.
+const BATTERY_PRESENT_THRESHOLD_MV: u16 = 3_000;
+const BATTERY_ADC_SETTLE_MS: u64 = 120;
 
 /// Errors returned by the unified charger API.
 #[derive(Debug, Clone, Copy)]
@@ -47,6 +55,28 @@ impl Charger {
 pub async fn initialize_pmu(i2c_device: PmuI2c) -> Charger {
     let mut pmu = SY6970::new(i2c_device);
     pmu.init().await.expect("Failed to initialize SY6970");
+
+    // The T-Display-S3 Pro's SY6970 limits the system input current if
+    // charging remains enabled with no battery connected. Let its ADC settle,
+    // then mirror LilyGO's conditional workaround: disable charging in that
+    // USB-only case, while preserving normal charging for a connected pack.
+    Timer::after_millis(BATTERY_ADC_SETTLE_MS).await;
+    let battery_voltage_mv = pmu
+        .get_battery_voltage_mv()
+        .await
+        .expect("Failed to read SY6970 battery voltage");
+    if battery_voltage_mv < BATTERY_PRESENT_THRESHOLD_MV {
+        pmu.set_charge_enabled(false)
+            .await
+            .expect("Failed to disable SY6970 charging for USB-only power");
+        info!(
+            "No usable battery detected ({battery_voltage_mv} mV); disabled SY6970 charging for stable USB power"
+        );
+    } else {
+        // Retain the board's factory-programmed charging limits and state.
+        // This USB-only safeguard must not override normal battery charging.
+        info!("Battery detected ({battery_voltage_mv} mV); retained SY6970 charging configuration");
+    }
     info!("Initialized SY6970 PMU");
     Charger(pmu)
 }
