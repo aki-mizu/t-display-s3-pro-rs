@@ -27,6 +27,7 @@ esp-backtrace = { version = "0.19.0", features = [
 ] }
 esp-println = { version = "0.17.0", features = ["esp32s3", "log-04"] }
 embassy-executor = { version = "0.10.0", features = ["log"] }
+embassy-futures = { version = "0.1.2" }
 embassy-time = { version = "0.5.1", features = ["log"] }
 mipidsi = { version = "0.10.0" }
 drivers = { path = "../drivers", features = ["async"] }

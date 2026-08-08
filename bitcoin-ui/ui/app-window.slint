@@ -6,13 +6,64 @@ component Bip39LetterKey inherits KeyButton {
     letter-key: true;
 }
 
+// A compact, original battery status indicator. External USB power makes the
+// battery orange, so a separate USB glyph is unnecessary. Battery percentage
+// stays internal so the display remains glanceable.
+component BatteryStatusIcon inherits Rectangle {
+    in property <bool> status-available: false;
+    in property <bool> usb-present: false;
+    in property <bool> battery-present: false;
+    in property <int> battery-percentage: 0;
+
+    property <color> battery-color: !root.status-available || !root.battery-present ? BitcoinPalette.muted : root.usb-present ? BitcoinPalette.accent : root.battery-percentage <= 5 ? #ef4444 : root.battery-percentage <= 20 ? #f59e0b : BitcoinPalette.text;
+
+    width: 24px;
+    height: 15px;
+
+    // Jade-style battery: white normally, orange when low, red when critical.
+    // External USB power makes it consistently orange.
+    Rectangle {
+        visible: root.status-available && root.battery-present;
+        x: 0px;
+        y: 2px;
+        width: 21px;
+        height: 11px;
+        background: #00000000;
+        border-color: root.battery-color;
+        border-width: 1px;
+        border-radius: 1px;
+    }
+    Rectangle {
+        visible: root.status-available && root.battery-present;
+        x: 21px;
+        y: 5px;
+        width: 2px;
+        height: 5px;
+        background: root.battery-color;
+        border-radius: 1px;
+    }
+    Rectangle {
+        visible: root.status-available && root.battery-present;
+        x: 2px;
+        y: 4px;
+        width: root.battery-percentage <= 5 ? 2px : root.battery-percentage <= 20 ? 4px : root.battery-percentage <= 40 ? 7px : root.battery-percentage <= 60 ? 10px : root.battery-percentage <= 80 ? 13px : 17px;
+        height: 7px;
+        background: root.battery-color;
+        border-radius: 1px;
+    }
+}
+
 // A local-only BIP39 final-word helper. It never derives keys, signs, or
 // persists a mnemonic; the Rust bridge retains only word-list indices.
 export component AppWindow inherits Window {
-    // Retained for the board wrapper's existing typed status API. These facts
-    // are intentionally not rendered in the BIP39-only interface.
+    // Board-supplied power facts, displayed as a compact always-visible
+    // top-right indicator without exposing hardware APIs to the UI flow.
+    in-out property <bool> power-status-available: false;
+    in-out property <bool> usb-present: false;
+    in-out property <bool> battery-present: false;
     in-out property <int> battery-percentage: 0;
-    in-out property <bool> charging: false;
+    // Kept for the board wrapper's typed presentation API and diagnostics;
+    // the compact status icons below are the user-facing presentation.
     in-out property <string> device-status: "";
 
     in-out property <int> current-screen: 0;
@@ -294,6 +345,15 @@ export component AppWindow inherits Window {
                     clicked => { root.mnemonic-reset(); root.current-screen = 0; }
                 }
             }
+        }
+
+        BatteryStatusIcon {
+            x: 454px;
+            y: 2px;
+            status-available: root.power-status-available;
+            usb-present: root.usb-present;
+            battery-present: root.battery-present;
+            battery-percentage: root.battery-percentage;
         }
     }
 }

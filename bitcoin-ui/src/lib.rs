@@ -29,10 +29,14 @@ pub const MNEMONIC_PREFIX_WORD_COUNT: usize = PREFIX_WORD_COUNT;
 #[derive(Debug)]
 pub struct UiError;
 
-/// Battery facts supplied by board firmware.
+/// Power facts supplied by board firmware.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BatteryState {
-    pub percentage: u8,
+    /// Whether an external USB input is connected to the PMU.
+    pub usb_present: bool,
+    /// A voltage-derived battery percentage. `None` means no usable battery
+    /// was detected, such as when the physical battery switch is off.
+    pub percentage: Option<u8>,
     pub charging: bool,
 }
 
@@ -88,11 +92,17 @@ impl WalletUi {
                     .into(),
             ),
             DeviceStatus::Battery(state) => self.set_battery_state(state),
-            DeviceStatus::BatteryUnavailable => self.window.set_device_status(
-                "Battery status unavailable. Check the PMU connection and try again."
-                    .into(),
-            ),
+            DeviceStatus::BatteryUnavailable => {
+                self.window.set_power_status_available(false);
+                self.window.set_battery_present(false);
+                self.window.set_device_status(
+                    "Battery status unavailable. Check the PMU connection and try again."
+                        .into(),
+                );
+            }
             DeviceStatus::ChargerStateUnavailable { percentage } => {
+                self.window.set_power_status_available(true);
+                self.window.set_battery_present(true);
                 self.window
                     .set_battery_percentage(i32::from(percentage.min(100)));
                 self.window.set_device_status(
@@ -133,12 +143,24 @@ impl WalletUi {
     }
 
     fn set_battery_state(&self, state: BatteryState) {
-        let percentage = state.percentage.min(100);
+        let percentage = state.percentage.unwrap_or(0).min(100);
+        self.window.set_power_status_available(true);
+        self.window.set_usb_present(state.usb_present);
+        self.window.set_battery_present(state.percentage.is_some());
         self.window.set_battery_percentage(i32::from(percentage));
-        self.window.set_charging(state.charging);
         self.window.set_device_status(
             alloc::format!(
-                "Battery: {percentage}% / Charger: {}",
+                "USB: {} / Battery: {} / Charger: {}",
+                if state.usb_present {
+                    "connected"
+                } else {
+                    "disconnected"
+                },
+                if state.percentage.is_some() {
+                    alloc::format!("{percentage}%")
+                } else {
+                    String::from("unavailable")
+                },
                 if state.charging {
                     "charging"
                 } else {

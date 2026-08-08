@@ -30,6 +30,22 @@ impl ChargeStatus {
     }
 }
 
+/// Input and charge facts reported by the SY6970 system-status register.
+///
+/// `usb_present` describes a USB input source rather than an OTG output. The
+/// separate `input_power_good` bit indicates that the detected input is
+/// currently usable by the PMU.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct SystemStatus {
+    /// A USB power source is connected to the board.
+    pub usb_present: bool,
+    /// The connected input source is currently power-good.
+    pub input_power_good: bool,
+    /// The current battery charge phase.
+    pub charge_status: ChargeStatus,
+}
+
 /// Errors produced by the SY6970 driver.
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

@@ -1,5 +1,7 @@
 use bitcoin_ui::{BatteryState, DeviceStatus, MNEMONIC_PREFIX_WORD_COUNT, WalletUi};
+use embassy_futures::select::{Either, select};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
+use embassy_time::{Duration, Ticker};
 use esp_hal::rng::Trng;
 use log::{error, info};
 
@@ -8,6 +10,7 @@ use crate::Charger;
 pub struct Controller<'a> {
     ui: &'a WalletUi,
     pmu: Charger,
+    last_power_state: Option<PresentedPowerState>,
 }
 
 #[derive(Debug, Clone)]
@@ -16,13 +19,51 @@ enum Action {
     GenerateRandomWords,
 }
 
+/// The visible power facts painted into the UI. Retaining this separately from
+/// the full PMU snapshot lets the controller poll in the background without
+/// repainting when only a non-visible charge phase changes.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum PresentedPowerState {
+    Available(PowerIndicator),
+    Unavailable,
+}
+
+/// The compact indicator only presents USB presence and a quantized battery
+/// fill level. Charging-state samples remain available to the firmware but do
+/// not make the static icon redraw.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct PowerIndicator {
+    usb_present: bool,
+    percentage: Option<u8>,
+}
+
 type ActionChannelType = Channel<CriticalSectionRawMutex, Action, 2>;
 
 static ACTION: ActionChannelType = Channel::new();
 
+const POWER_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
+
+/// Collapses a noisy voltage estimate into the six fill levels the battery
+/// icon can actually render. This prevents a one-percent ADC fluctuation from
+/// causing a needless status-bar repaint while the battery is not charging.
+fn battery_icon_percentage(percentage: Option<u8>) -> Option<u8> {
+    percentage.map(|percentage| match percentage {
+        0..=5 => 5,
+        6..=20 => 20,
+        21..=40 => 40,
+        41..=60 => 60,
+        61..=80 => 80,
+        _ => 100,
+    })
+}
+
 impl<'a> Controller<'a> {
     pub fn new(ui: &'a WalletUi, pmu: Charger) -> Self {
-        Self { ui, pmu }
+        Self {
+            ui,
+            pmu,
+            last_power_state: None,
+        }
     }
 
     pub async fn run(&mut self) {
@@ -32,11 +73,20 @@ impl<'a> Controller<'a> {
             error!("initial board-status refresh failed");
         }
 
+        let mut power_status_ticker = Ticker::every(POWER_STATUS_REFRESH_INTERVAL);
         loop {
-            let action = ACTION.receive().await;
-            info!("process action {:?}", &action);
-            if self.process_action(action).await.is_err() {
-                error!("process action failed");
+            match select(ACTION.receive(), power_status_ticker.next()).await {
+                Either::First(action) => {
+                    info!("process action {:?}", &action);
+                    if self.process_action(action).await.is_err() {
+                        error!("process action failed");
+                    }
+                }
+                Either::Second(()) => {
+                    if self.refresh_device_status().await.is_err() {
+                        error!("periodic board-status refresh failed");
+                    }
+                }
             }
         }
     }
@@ -68,31 +118,43 @@ impl<'a> Controller<'a> {
     }
 
     async fn refresh_device_status(&mut self) -> Result<(), ()> {
-        let percentage = match self.pmu.get_battery_percentage().await {
-            Ok(percentage) => percentage,
+        let battery_state = self
+            .pmu
+            .get_power_status()
+            .await
+            .map(|status| BatteryState {
+                usb_present: status.usb_present,
+                percentage: battery_icon_percentage(status.battery_percentage),
+                charging: status.charging,
+            });
+        let next_state = match battery_state {
+            Ok(state) => PresentedPowerState::Available(PowerIndicator {
+                usb_present: state.usb_present,
+                percentage: state.percentage,
+            }),
             Err(e) => {
-                error!("Failed to read battery percentage: {e:?}");
-                self.ui.set_device_status(DeviceStatus::BatteryUnavailable);
-                return Err(());
+                error!("Failed to read power status: {e:?}");
+                PresentedPowerState::Unavailable
             }
         };
 
-        let charging = match self.pmu.is_charging().await {
-            Ok(charging) => charging,
-            Err(e) => {
-                error!("Failed to read charging state: {e:?}");
-                self.ui
-                    .set_device_status(DeviceStatus::ChargerStateUnavailable { percentage });
-                return Err(());
+        if self.last_power_state != Some(next_state) {
+            match (next_state, battery_state) {
+                (PresentedPowerState::Available(_), Ok(state)) => {
+                    self.ui.set_device_status(DeviceStatus::Battery(state));
+                }
+                (PresentedPowerState::Unavailable, Err(_)) => {
+                    self.ui.set_device_status(DeviceStatus::BatteryUnavailable);
+                }
+                _ => unreachable!("power presentation must match PMU read result"),
             }
-        };
+            self.last_power_state = Some(next_state);
+        }
 
-        self.ui
-            .set_device_status(DeviceStatus::Battery(BatteryState {
-                percentage,
-                charging,
-            }));
-        Ok(())
+        match next_state {
+            PresentedPowerState::Available(_) => Ok(()),
+            PresentedPowerState::Unavailable => Err(()),
+        }
     }
 
     fn set_action_event_handlers(&self) {
