@@ -152,6 +152,23 @@ impl WalletUi {
 
 const MAX_WORD_PREFIX_LEN: usize = 4;
 
+/// Visible result of the most recent `Use word` action.
+///
+/// It intentionally contains no word text or index, so it can distinguish a
+/// delivered tap from an unfinished entry without exposing mnemonic material.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum CommitFeedback {
+    #[default]
+    None,
+    EnterLetters,
+    MoreMatches {
+        count: usize,
+    },
+    Confirmed {
+        position: usize,
+    },
+}
+
 /// Ephemeral touchscreen state for the BIP39 final-word helper.
 ///
 /// The completed prefix remains only as word-list indices. It never builds or
@@ -163,6 +180,7 @@ struct LastWordFlow {
     prefix: [u8; MAX_WORD_PREFIX_LEN],
     prefix_len: usize,
     last_letter_was_rejected: bool,
+    commit_feedback: CommitFeedback,
     entropy_bits: u8,
     entropy_confirmed: bool,
 }
@@ -199,10 +217,12 @@ impl LastWordFlow {
         self.prefix = candidate_prefix;
         self.prefix_len = candidate_len;
         self.last_letter_was_rejected = false;
+        self.commit_feedback = CommitFeedback::None;
     }
 
     fn backspace(&mut self) {
         self.last_letter_was_rejected = false;
+        self.commit_feedback = CommitFeedback::None;
 
         if self.prefix_len > 0 {
             self.prefix_len -= 1;
@@ -218,18 +238,32 @@ impl LastWordFlow {
     }
 
     fn commit_word(&mut self) -> bool {
-        let Some(index) = self.selected_word_index() else {
-            return false;
-        };
         if self.is_complete() {
+            return true;
+        }
+
+        let prefix = self.prefix_text();
+        if prefix.is_empty() {
+            self.commit_feedback = CommitFeedback::EnterLetters;
             return false;
         }
+
+        let matches = words_by_prefix(prefix);
+        let Some(index) = self.selected_word_index() else {
+            self.commit_feedback = CommitFeedback::MoreMatches {
+                count: matches.len(),
+            };
+            return false;
+        };
 
         self.word_indices[self.word_count] = index;
         self.word_count += 1;
         self.prefix = [0; MAX_WORD_PREFIX_LEN];
         self.prefix_len = 0;
         self.last_letter_was_rejected = false;
+        self.commit_feedback = CommitFeedback::Confirmed {
+            position: self.word_count,
+        };
         self.clear_entropy();
 
         self.is_complete()
@@ -255,6 +289,7 @@ impl LastWordFlow {
         self.word_count = PREFIX_WORD_COUNT;
         self.prefix = [0; MAX_WORD_PREFIX_LEN];
         self.prefix_len = 0;
+        self.commit_feedback = CommitFeedback::None;
         self.clear_entropy();
         Ok(())
     }
@@ -331,6 +366,21 @@ impl LastWordFlow {
             return String::from(
                 "No BIP39 word can continue with that letter. Try another letter.",
             );
+        }
+
+        match self.commit_feedback {
+            CommitFeedback::None => {}
+            CommitFeedback::EnterLetters => {
+                return String::from("Enter a BIP39 word before tapping Use word.");
+            }
+            CommitFeedback::MoreMatches { count } => {
+                return alloc::format!(
+                    "Use word needs one BIP39 word — {count} matching words remain."
+                );
+            }
+            CommitFeedback::Confirmed { position } => {
+                return alloc::format!("Word {position} confirmed.");
+            }
         }
 
         if self.is_complete() {
@@ -517,6 +567,38 @@ mod mnemonic_tests {
         flow.push_letter(1); // ab is a valid prefix, for example "abandon"
         assert_eq!(flow.prefix_text(), "ab");
         assert!(!flow.last_letter_was_rejected);
+    }
+
+    #[test]
+    fn use_word_explains_an_unfinished_or_ambiguous_entry() {
+        let mut flow = LastWordFlow::default();
+
+        assert!(!flow.commit_word());
+        assert_eq!(flow.commit_feedback, CommitFeedback::EnterLetters);
+        assert!(flow.message().contains("Enter a BIP39 word"));
+
+        flow.push_letter(0); // a has many BIP39 matches
+        assert!(!flow.commit_word());
+        assert!(matches!(
+            flow.commit_feedback,
+            CommitFeedback::MoreMatches { count } if count > 1
+        ));
+        assert!(flow.message().contains("matching words remain"));
+    }
+
+    #[test]
+    fn use_word_visibly_confirms_a_selected_word() {
+        let mut flow = LastWordFlow::default();
+        for byte in b"act" {
+            flow.push_letter(i32::from(*byte - b'a'));
+        }
+
+        assert!(!flow.commit_word());
+        assert_eq!(
+            flow.commit_feedback,
+            CommitFeedback::Confirmed { position: 1 }
+        );
+        assert_eq!(flow.message(), "Word 1 confirmed.");
     }
 
     #[test]
