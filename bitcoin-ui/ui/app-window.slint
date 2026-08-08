@@ -1,5 +1,11 @@
 import { BitcoinPalette, KeyButton } from "common.slint";
 
+// Keeps the BIP39 keyboard's high-contrast availability treatment separate
+// from generic action buttons such as Reset and Back.
+component Bip39LetterKey inherits KeyButton {
+    letter-key: true;
+}
+
 // A local-only BIP39 final-word helper. It never derives keys, signs, or
 // persists a mnemonic; the Rust bridge retains only word-list indices.
 export component AppWindow inherits Window {
@@ -15,6 +21,9 @@ export component AppWindow inherits Window {
     in-out property <string> mnemonic-entry: "";
     in-out property <string> mnemonic-message: "Enter word 1 of 11.";
     in-out property <bool> mnemonic-can-commit: false;
+    // One entry per lowercase English letter (a=0 through z=25). Rust
+    // refreshes it after every edit so impossible next letters are disabled.
+    in-out property <[bool]> mnemonic-next-letters: [];
     in-out property <string> candidate-word: "";
     in-out property <int> candidate-index: 0;
     in-out property <string> entropy-bits-label: "0000000";
@@ -124,16 +133,16 @@ export component AppWindow inherits Window {
                 padding-right: 0px;
                 spacing: 0px;
 
-                KeyButton { width: 48px; height: 48px; label: "Q"; clicked => { root.mnemonic-key(16); } }
-                KeyButton { width: 48px; height: 48px; label: "W"; clicked => { root.mnemonic-key(22); } }
-                KeyButton { width: 48px; height: 48px; label: "E"; clicked => { root.mnemonic-key(4); } }
-                KeyButton { width: 48px; height: 48px; label: "R"; clicked => { root.mnemonic-key(17); } }
-                KeyButton { width: 48px; height: 48px; label: "T"; clicked => { root.mnemonic-key(19); } }
-                KeyButton { width: 48px; height: 48px; label: "Y"; clicked => { root.mnemonic-key(24); } }
-                KeyButton { width: 48px; height: 48px; label: "U"; clicked => { root.mnemonic-key(20); } }
-                KeyButton { width: 48px; height: 48px; label: "I"; clicked => { root.mnemonic-key(8); } }
-                KeyButton { width: 48px; height: 48px; label: "O"; clicked => { root.mnemonic-key(14); } }
-                KeyButton { width: 48px; height: 48px; label: "P"; clicked => { root.mnemonic-key(15); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "Q"; enabled: root.mnemonic-next-letters[16]; clicked => { root.mnemonic-key(16); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "W"; enabled: root.mnemonic-next-letters[22]; clicked => { root.mnemonic-key(22); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "E"; enabled: root.mnemonic-next-letters[4]; clicked => { root.mnemonic-key(4); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "R"; enabled: root.mnemonic-next-letters[17]; clicked => { root.mnemonic-key(17); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "T"; enabled: root.mnemonic-next-letters[19]; clicked => { root.mnemonic-key(19); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "Y"; enabled: root.mnemonic-next-letters[24]; clicked => { root.mnemonic-key(24); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "U"; enabled: root.mnemonic-next-letters[20]; clicked => { root.mnemonic-key(20); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "I"; enabled: root.mnemonic-next-letters[8]; clicked => { root.mnemonic-key(8); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "O"; enabled: root.mnemonic-next-letters[14]; clicked => { root.mnemonic-key(14); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "P"; enabled: root.mnemonic-next-letters[15]; clicked => { root.mnemonic-key(15); } }
             }
 
             HorizontalLayout {
@@ -142,15 +151,15 @@ export component AppWindow inherits Window {
                 padding-right: 24px;
                 spacing: 0px;
 
-                KeyButton { width: 48px; height: 48px; label: "A"; clicked => { root.mnemonic-key(0); } }
-                KeyButton { width: 48px; height: 48px; label: "S"; clicked => { root.mnemonic-key(18); } }
-                KeyButton { width: 48px; height: 48px; label: "D"; clicked => { root.mnemonic-key(3); } }
-                KeyButton { width: 48px; height: 48px; label: "F"; clicked => { root.mnemonic-key(5); } }
-                KeyButton { width: 48px; height: 48px; label: "G"; clicked => { root.mnemonic-key(6); } }
-                KeyButton { width: 48px; height: 48px; label: "H"; clicked => { root.mnemonic-key(7); } }
-                KeyButton { width: 48px; height: 48px; label: "J"; clicked => { root.mnemonic-key(9); } }
-                KeyButton { width: 48px; height: 48px; label: "K"; clicked => { root.mnemonic-key(10); } }
-                KeyButton { width: 48px; height: 48px; label: "L"; clicked => { root.mnemonic-key(11); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "A"; enabled: root.mnemonic-next-letters[0]; clicked => { root.mnemonic-key(0); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "S"; enabled: root.mnemonic-next-letters[18]; clicked => { root.mnemonic-key(18); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "D"; enabled: root.mnemonic-next-letters[3]; clicked => { root.mnemonic-key(3); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "F"; enabled: root.mnemonic-next-letters[5]; clicked => { root.mnemonic-key(5); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "G"; enabled: root.mnemonic-next-letters[6]; clicked => { root.mnemonic-key(6); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "H"; enabled: root.mnemonic-next-letters[7]; clicked => { root.mnemonic-key(7); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "J"; enabled: root.mnemonic-next-letters[9]; clicked => { root.mnemonic-key(9); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "K"; enabled: root.mnemonic-next-letters[10]; clicked => { root.mnemonic-key(10); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "L"; enabled: root.mnemonic-next-letters[11]; clicked => { root.mnemonic-key(11); } }
             }
 
             HorizontalLayout {
@@ -167,13 +176,13 @@ export component AppWindow inherits Window {
                     label: "Random 11";
                     clicked => { root.request-random-words(); }
                 }
-                KeyButton { width: 48px; height: 48px; label: "Z"; clicked => { root.mnemonic-key(25); } }
-                KeyButton { width: 48px; height: 48px; label: "X"; clicked => { root.mnemonic-key(23); } }
-                KeyButton { width: 48px; height: 48px; label: "C"; clicked => { root.mnemonic-key(2); } }
-                KeyButton { width: 48px; height: 48px; label: "V"; clicked => { root.mnemonic-key(21); } }
-                KeyButton { width: 48px; height: 48px; label: "B"; clicked => { root.mnemonic-key(1); } }
-                KeyButton { width: 48px; height: 48px; label: "N"; clicked => { root.mnemonic-key(13); } }
-                KeyButton { width: 48px; height: 48px; label: "M"; clicked => { root.mnemonic-key(12); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "Z"; enabled: root.mnemonic-next-letters[25]; clicked => { root.mnemonic-key(25); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "X"; enabled: root.mnemonic-next-letters[23]; clicked => { root.mnemonic-key(23); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "C"; enabled: root.mnemonic-next-letters[2]; clicked => { root.mnemonic-key(2); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "V"; enabled: root.mnemonic-next-letters[21]; clicked => { root.mnemonic-key(21); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "B"; enabled: root.mnemonic-next-letters[1]; clicked => { root.mnemonic-key(1); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "N"; enabled: root.mnemonic-next-letters[13]; clicked => { root.mnemonic-key(13); } }
+                Bip39LetterKey { width: 48px; height: 48px; label: "M"; enabled: root.mnemonic-next-letters[12]; clicked => { root.mnemonic-key(12); } }
                 KeyButton {
                     width: 72px;
                     height: 48px;

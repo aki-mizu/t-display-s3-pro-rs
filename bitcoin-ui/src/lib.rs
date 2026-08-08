@@ -14,7 +14,7 @@ use bip39_last_word::{
     words_by_prefix,
 };
 use core::cell::RefCell;
-use slint::ComponentHandle;
+use slint::{ComponentHandle, VecModel};
 
 mod generated {
     slint::include_modules!();
@@ -342,6 +342,33 @@ impl LastWordFlow {
             .flatten()
     }
 
+    /// Returns the only letters that can extend the current entry to an
+    /// English BIP39 word. This is the same prefix filtering interaction used
+    /// by Jade: impossible keys are disabled before they can be tapped.
+    fn next_letter_enabled(&self) -> [bool; 26] {
+        let mut enabled = [false; 26];
+
+        // The word list's first four letters identify every English BIP39
+        // word. Once a word can be confirmed, leave letter entry closed until
+        // the user confirms it or backspaces.
+        if self.is_complete() || self.prefix_len == MAX_WORD_PREFIX_LEN {
+            return enabled;
+        }
+
+        for word in words_by_prefix(self.prefix_text()) {
+            let Some(next) = word.as_bytes().get(self.prefix_len).copied() else {
+                // An exact short word can be committed, but does not enable a
+                // further character by itself.
+                continue;
+            };
+            if next.is_ascii_lowercase() {
+                enabled[usize::from(next - b'a')] = true;
+            }
+        }
+
+        enabled
+    }
+
     fn entry_text(&self) -> String {
         let prefix = self.prefix_text();
         if prefix.is_empty() {
@@ -518,6 +545,7 @@ fn sync_mnemonic_view(window: &AppWindow, flow: &LastWordFlow) {
     window.set_mnemonic_entry(flow.entry_text().into());
     window.set_mnemonic_message(flow.message().into());
     window.set_mnemonic_can_commit(flow.selected_word_index().is_some());
+    window.set_mnemonic_next_letters(VecModel::from_slice(&flow.next_letter_enabled()));
     window.set_entropy_bits_label(flow.entropy_bits_label().into());
     window.set_entropy_bit_64(flow.entropy_bit_is_set(6));
     window.set_entropy_bit_32(flow.entropy_bit_is_set(5));
@@ -567,6 +595,33 @@ mod mnemonic_tests {
         flow.push_letter(1); // ab is a valid prefix, for example "abandon"
         assert_eq!(flow.prefix_text(), "ab");
         assert!(!flow.last_letter_was_rejected);
+    }
+
+    #[test]
+    fn enables_only_letters_that_can_continue_the_current_prefix() {
+        let mut flow = LastWordFlow::default();
+
+        // At the start of a word, only BIP39 initial letters are offered.
+        let initial = flow.next_letter_enabled();
+        assert!(initial[usize::from(b'a' - b'a')]);
+        assert!(!initial[usize::from(b'x' - b'a')]);
+
+        // "aba" can only be continued as "aban..." in the English list.
+        for byte in b"aba" {
+            flow.push_letter(i32::from(*byte - b'a'));
+        }
+        let after_aba = flow.next_letter_enabled();
+        assert!(after_aba[usize::from(b'n' - b'a')]);
+        assert_eq!(after_aba.into_iter().filter(|enabled| *enabled).count(), 1);
+
+        // Four letters are sufficient to identify a BIP39 word, so the UI
+        // stops accepting more letters and makes the user confirm or edit.
+        flow.push_letter(i32::from(b'n' - b'a'));
+        assert!(
+            flow.next_letter_enabled()
+                .into_iter()
+                .all(|enabled| !enabled)
+        );
     }
 
     #[test]
@@ -708,7 +763,7 @@ mod mnemonic_tests {
     fn slint_key_callback_updates_the_prefix() {
         use alloc::{boxed::Box, rc::Rc};
         use slint::{
-            PhysicalSize,
+            Model, PhysicalSize,
             platform::{
                 Platform, PlatformError, WindowAdapter,
                 software_renderer::{MinimalSoftwareWindow, RepaintBufferType},
@@ -736,5 +791,8 @@ mod mnemonic_tests {
         window.invoke_mnemonic_key(0);
 
         assert_eq!(window.get_mnemonic_prefix().as_str(), "a");
+        let next_letters = window.get_mnemonic_next_letters();
+        assert_eq!(next_letters.row_data(usize::from(b'b' - b'a')), Some(true));
+        assert_eq!(next_letters.row_data(usize::from(b'a' - b'a')), Some(false));
     }
 }

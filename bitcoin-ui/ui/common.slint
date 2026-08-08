@@ -6,27 +6,39 @@ export global BitcoinPalette {
     out property <color> text: #f8fafc;
     out property <color> muted: #9aa8bd;
     out property <color> accent: #f7931a;
+    // High-contrast availability colors for the compact touchscreen keyboard.
+    out property <color> key-enabled: #1d4ed8;
+    out property <color> key-enabled-border: #60a5fa;
 }
 
 export component KeyButton inherits Rectangle {
     in-out property <string> label: "";
+    // `active` is a selected/toggled state (for example, an entropy bit).
+    // `enabled` controls whether this button can receive input at all.
     in-out property <bool> active: false;
+    in-out property <bool> enabled: true;
+    // BIP39 letter keys use a stronger enabled/disabled treatment than
+    // ordinary action buttons, whose enabled state does not change.
+    in property <bool> letter-key: false;
     callback clicked();
 
     height: 28px;
     border-radius: 5px;
     border-width: 1px;
-    border-color: active ? BitcoinPalette.accent : BitcoinPalette.border;
-    background: active ? BitcoinPalette.accent : BitcoinPalette.panel-highlight;
+    border-color: active ? BitcoinPalette.accent : letter-key ? (enabled ? BitcoinPalette.key-enabled-border : BitcoinPalette.page) : BitcoinPalette.border;
+    background: active ? BitcoinPalette.accent : letter-key ? (enabled ? BitcoinPalette.key-enabled : BitcoinPalette.page) : BitcoinPalette.panel-highlight;
 
     Text {
         text: root.label;
-        color: active ? #211204 : BitcoinPalette.text;
+        color: active ? #211204 : letter-key ? (enabled ? BitcoinPalette.text : #526176) : BitcoinPalette.text;
         font-size: 12px;
         font-weight: 700;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
 
-    TouchArea { clicked => { root.clicked(); } }
+    TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
 }
