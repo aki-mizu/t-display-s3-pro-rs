@@ -6,6 +6,47 @@ component Bip39LetterKey inherits KeyButton {
     letter-key: true;
 }
 
+component EntropyBitKey inherits Rectangle {
+    in-out property <bool> active: false;
+    in property <int> position: 1;
+    callback clicked();
+
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: root.active ? BitcoinPalette.accent : BitcoinPalette.border;
+    background: root.active ? BitcoinPalette.accent : BitcoinPalette.panel-highlight;
+
+    Text {
+        x: 0px;
+        y: 9px;
+        width: parent.width;
+        height: 14px;
+        text: "Bit " + root.position;
+        color: root.active ? #211204 : BitcoinPalette.muted;
+        font-size: 10px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    Text {
+        x: 0px;
+        y: 25px;
+        width: parent.width;
+        height: 50px;
+        text: root.active ? "1" : "0";
+        color: root.active ? #211204 : BitcoinPalette.text;
+        font-size: 32px;
+        font-weight: 800;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
 // A compact, original battery status indicator. Battery percentage stays
 // internal so the display remains glanceable.
 component BatteryStatusIcon inherits Rectangle {
@@ -296,7 +337,7 @@ export component AppWindow inherits Window {
             spacing: 2px;
 
             Text {
-                text: "Choose the seven entropy bits";
+                text: "Enter the seven entropy bits";
                 color: BitcoinPalette.text;
                 height: 15px;
                 font-size: 15px;
@@ -328,7 +369,7 @@ export component AppWindow inherits Window {
 
                     Text {
                         height: 12px;
-                        text: "Selected bits: " + root.entropy-bits-label;
+                        text: "Entropy bits: " + root.entropy-bits-label;
                         color: BitcoinPalette.accent;
                         font-size: 11px;
                         font-weight: 800;
@@ -347,26 +388,16 @@ export component AppWindow inherits Window {
             }
 
             HorizontalLayout {
-                height: 46px;
-                padding-left: 1px;
-                padding-right: 1px;
-                spacing: 0px;
+                height: 94px;
+                spacing: 2px;
 
-                KeyButton { width: 118px; height: 46px; label: "64"; active: root.entropy-bit-64; clicked => { root.entropy-toggle(6); } }
-                KeyButton { width: 118px; height: 46px; label: "32"; active: root.entropy-bit-32; clicked => { root.entropy-toggle(5); } }
-                KeyButton { width: 118px; height: 46px; label: "16"; active: root.entropy-bit-16; clicked => { root.entropy-toggle(4); } }
-                KeyButton { width: 118px; height: 46px; label: "8"; active: root.entropy-bit-8; clicked => { root.entropy-toggle(3); } }
-            }
-
-            HorizontalLayout {
-                height: 46px;
-                padding-left: 3px;
-                padding-right: 3px;
-                spacing: 0px;
-
-                KeyButton { width: 156px; height: 46px; label: "4"; active: root.entropy-bit-4; clicked => { root.entropy-toggle(2); } }
-                KeyButton { width: 156px; height: 46px; label: "2"; active: root.entropy-bit-2; clicked => { root.entropy-toggle(1); } }
-                KeyButton { width: 156px; height: 46px; label: "1"; active: root.entropy-bit-1; clicked => { root.entropy-toggle(0); } }
+                EntropyBitKey { width: 66px; height: 94px; position: 1; active: root.entropy-bit-64; clicked => { root.entropy-toggle(6); } }
+                EntropyBitKey { width: 66px; height: 94px; position: 2; active: root.entropy-bit-32; clicked => { root.entropy-toggle(5); } }
+                EntropyBitKey { width: 66px; height: 94px; position: 3; active: root.entropy-bit-16; clicked => { root.entropy-toggle(4); } }
+                EntropyBitKey { width: 66px; height: 94px; position: 4; active: root.entropy-bit-8; clicked => { root.entropy-toggle(3); } }
+                EntropyBitKey { width: 66px; height: 94px; position: 5; active: root.entropy-bit-4; clicked => { root.entropy-toggle(2); } }
+                EntropyBitKey { width: 66px; height: 94px; position: 6; active: root.entropy-bit-2; clicked => { root.entropy-toggle(1); } }
+                EntropyBitKey { width: 66px; height: 94px; position: 7; active: root.entropy-bit-1; clicked => { root.entropy-toggle(0); } }
             }
 
             HorizontalLayout {
