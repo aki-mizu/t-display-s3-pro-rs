@@ -196,6 +196,7 @@ export component AppWindow inherits Window {
     // refreshes it after every edit so impossible next letters are disabled.
     in-out property <[bool]> mnemonic-next-letters: [];
     in-out property <string> candidate-word: "";
+    in-out property <bool> entropy-confirmed: false;
         in-out property <int> entropy-entry-mode: 0;
         in-out property <int> entropy-picker: 0;
         in-out property <int> entropy-octal-face: 1;
@@ -513,7 +514,8 @@ export component AppWindow inherits Window {
                     width: 156px;
                     height: 42px;
                     label: "Confirm entropy";
-                    active: true;
+                    active: !root.entropy-confirmed;
+                    enabled: !root.entropy-confirmed;
                     clicked => { root.entropy-confirm(); }
                 }
                 KeyButton {

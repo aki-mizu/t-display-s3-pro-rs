@@ -44,6 +44,10 @@ impl LastWordFlow {
         }
     }
 
+    pub(crate) fn is_entropy_confirmed(&self) -> bool {
+        self.entropy_confirmed
+    }
+
     pub(crate) fn entropy_bit_is_set(&self, bit: u8) -> bool {
         self.entropy_bits & (1_u8 << bit) != 0
     }

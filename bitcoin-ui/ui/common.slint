@@ -23,6 +23,7 @@ export component KeyButton inherits Rectangle {
     callback clicked();
 
     height: 28px;
+    opacity: (enabled || letter-key) ? 1 : 0.5;
     border-radius: 5px;
     border-width: 1px;
     border-color: active ? BitcoinPalette.accent : letter-key ? (enabled ? BitcoinPalette.key-enabled-border : BitcoinPalette.page) : BitcoinPalette.border;

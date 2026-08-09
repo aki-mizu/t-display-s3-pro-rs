@@ -124,6 +124,7 @@ pub(crate) fn sync_mnemonic_view(window: &AppWindow, flow: &LastWordFlow) {
     window.set_entropy_bit_2(flow.entropy_bit_is_set(1));
     window.set_entropy_bit_1(flow.entropy_bit_is_set(0));
     window.set_candidate_word(flow.candidate_word().unwrap_or("").into());
+    window.set_entropy_confirmed(flow.is_entropy_confirmed());
 }
 
 #[cfg(test)]
@@ -156,7 +157,7 @@ mod tests {
         slint::platform::set_platform(Box::new(TestPlatform(renderer_window.clone()))).ok();
         renderer_window.set_size(PhysicalSize::new(480, 222));
         let window = AppWindow::new().expect("create test window");
-        configure_mnemonic_flow(&window);
+        let flow = configure_mnemonic_flow(&window);
 
         window.invoke_mnemonic_key(0);
 
@@ -164,5 +165,18 @@ mod tests {
         let next_letters = window.get_mnemonic_next_letters();
         assert_eq!(next_letters.row_data(usize::from(b'b' - b'a')), Some(true));
         assert_eq!(next_letters.row_data(usize::from(b'a' - b'a')), Some(false));
+
+        let word_indices = core::array::from_fn(|position| position as u16);
+        flow.borrow_mut()
+            .load_word_indices(word_indices)
+            .expect("valid test word indices");
+        sync_mnemonic_view(&window, &flow.borrow());
+        assert!(!window.get_entropy_confirmed());
+
+        window.invoke_entropy_confirm();
+        assert!(window.get_entropy_confirmed());
+
+        window.invoke_entropy_toggle(0);
+        assert!(!window.get_entropy_confirmed());
     }
 }
