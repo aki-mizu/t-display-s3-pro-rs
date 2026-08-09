@@ -106,6 +106,7 @@ impl LastWordFlow {
         self.word_count = PREFIX_WORD_COUNT;
         self.prefix = [0; MAX_WORD_PREFIX_LEN];
         self.prefix_len = 0;
+        self.last_letter_was_rejected = false;
         self.commit_feedback = CommitFeedback::None;
         self.clear_entropy();
         Ok(())
@@ -271,6 +272,20 @@ mod tests {
         assert_eq!(flow.entropy_bits, 0);
         assert!(!flow.entropy_confirmed);
         assert_eq!(flow.candidate_word(), None);
+    }
+
+    #[test]
+    fn loading_indices_clears_rejected_letter_feedback() {
+        let mut flow = LastWordFlow::default();
+        flow.push_letter(0); // a
+        flow.push_letter(0); // aa is not a BIP39 word prefix
+        assert!(flow.last_letter_was_rejected);
+
+        let indices = core::array::from_fn(|position| position as u16);
+        assert_eq!(flow.load_word_indices(indices), Ok(()));
+
+        assert!(!flow.last_letter_was_rejected);
+        assert!(!flow.message().contains("No BIP39 word"));
     }
 
     #[test]
