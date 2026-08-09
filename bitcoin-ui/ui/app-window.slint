@@ -92,6 +92,8 @@ export component AppWindow inherits Window {
     in-out property <string> mnemonic-prefix: "";
     in-out property <string> mnemonic-entry: "";
     in-out property <string> mnemonic-message: "Enter word 1 of 11.";
+    in-out property <string> mnemonic-confirmed-words: "";
+    in-out property <int> mnemonic-confirmed-words-font-size-hundredths: 2000;
     in-out property <bool> mnemonic-can-commit: false;
     // One entry per lowercase English letter (a=0 through z=25). Rust
     // refreshes it after every edit so impossible next letters are disabled.
@@ -133,26 +135,43 @@ export component AppWindow inherits Window {
             // top-row keys across the 480 px display.
             spacing: 0px;
 
-            Text {
-                text: "BIP39 final word";
-                color: BitcoinPalette.text;
-                height: 15px;
-                font-size: 15px;
-                font-weight: 800;
-                horizontal-alignment: center;
+            Rectangle {
+                height: root.mnemonic-confirmed-words == "" ? 15px : 36px;
+                background: #00000000;
+
+                Text {
+                    text: "BIP39 final word";
+                    color: BitcoinPalette.text;
+                    font-size: 15px;
+                    font-weight: 800;
+                    horizontal-alignment: center;
+                    visible: root.mnemonic-confirmed-words == "";
+                }
+
+                Text {
+                    text: root.mnemonic-confirmed-words;
+                    color: BitcoinPalette.text;
+                    font-size: root.mnemonic-confirmed-words-font-size-hundredths * 0.01px;
+                    font-weight: 800;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    overflow: clip;
+                    visible: root.mnemonic-confirmed-words != "";
+                }
             }
 
             Text {
                 text: root.mnemonic-message;
                 color: BitcoinPalette.muted;
-                height: 10px;
+                height: root.mnemonic-confirmed-words == "" ? 10px : 0px;
                 font-size: 9px;
                 horizontal-alignment: center;
                 overflow: elide;
+                visible: root.mnemonic-confirmed-words == "";
             }
 
             Rectangle {
-                height: 47px;
+                height: root.mnemonic-confirmed-words == "" ? 47px : 36px;
                 background: BitcoinPalette.panel;
                 border-color: BitcoinPalette.border;
                 border-width: 1px;
@@ -184,14 +203,14 @@ export component AppWindow inherits Window {
                     }
                     KeyButton {
                         width: 104px;
-                        height: 45px;
+                        height: root.mnemonic-confirmed-words == "" ? 45px : 34px;
                         label: "Use word";
                         active: root.mnemonic-can-commit;
                         clicked => { root.mnemonic-commit(); }
                     }
                     KeyButton {
                         width: 70px;
-                        height: 45px;
+                        height: root.mnemonic-confirmed-words == "" ? 45px : 34px;
                         label: "Reset";
                         clicked => { root.mnemonic-reset(); }
                     }

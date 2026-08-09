@@ -116,11 +116,14 @@ impl WalletUi {
 }
 
 const MAX_WORD_PREFIX_LEN: usize = 4;
+const WORD_LIST_HORIZONTAL_MARGIN_PX: usize = 1;
+const WORD_LIST_DISPLAY_WIDTH_PX: usize = 480 - (WORD_LIST_HORIZONTAL_MARGIN_PX * 2);
+const WORD_LIST_FONT_METRIC_SIZE_PX: usize = 9;
+const WORD_LIST_GLYPH_ADVANCE_SCALE: usize = 64;
+const WORD_LIST_MIN_FONT_SIZE_HUNDREDTHS: i32 = 600;
+const WORD_LIST_MAX_FONT_SIZE_HUNDREDTHS: i32 = 2_000;
 
-/// Visible result of the most recent `Use word` action.
-///
-/// It intentionally contains no word text or index, so it can distinguish a
-/// delivered tap from an unfinished entry without exposing mnemonic material.
+/// Visible error result of an unsuccessful `Use word` action.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 enum CommitFeedback {
     #[default]
@@ -128,9 +131,6 @@ enum CommitFeedback {
     EnterLetters,
     MoreMatches {
         count: usize,
-    },
-    Confirmed {
-        position: usize,
     },
 }
 
@@ -226,9 +226,7 @@ impl LastWordFlow {
         self.prefix = [0; MAX_WORD_PREFIX_LEN];
         self.prefix_len = 0;
         self.last_letter_was_rejected = false;
-        self.commit_feedback = CommitFeedback::Confirmed {
-            position: self.word_count,
-        };
+        self.commit_feedback = CommitFeedback::None;
         self.clear_entropy();
 
         self.is_complete()
@@ -370,9 +368,6 @@ impl LastWordFlow {
                     "Use word needs one BIP39 word — {count} matching words remain."
                 );
             }
-            CommitFeedback::Confirmed { position } => {
-                return alloc::format!("Word {position} confirmed.");
-            }
         }
 
         if self.is_complete() {
@@ -401,6 +396,44 @@ impl LastWordFlow {
         self.entropy_bits & (1_u8 << bit) != 0
     }
 
+    /// Returns confirmed words separated by spaces for the input-progress row.
+    fn confirmed_words_text(&self) -> String {
+        if self.word_count == 0 {
+            return String::new();
+        }
+        let mut text = String::new();
+        for i in 0..self.word_count {
+            if !text.is_empty() {
+                text.push(' ');
+            }
+            text.push_str(word_for_index(self.word_indices[i]).unwrap_or("?"));
+        }
+        text
+    }
+
+    fn confirmed_words_font_size_hundredths(&self) -> i32 {
+        let width_units = self
+            .confirmed_words_text()
+            .bytes()
+            .map(word_list_glyph_advance_units)
+            .sum::<usize>();
+        if width_units == 0 {
+            return WORD_LIST_MAX_FONT_SIZE_HUNDREDTHS;
+        }
+
+        let font_size = WORD_LIST_DISPLAY_WIDTH_PX
+            * WORD_LIST_FONT_METRIC_SIZE_PX
+            * WORD_LIST_GLYPH_ADVANCE_SCALE
+            * 100
+            / width_units;
+        i32::try_from(font_size)
+            .unwrap_or(WORD_LIST_MIN_FONT_SIZE_HUNDREDTHS)
+            .clamp(
+                WORD_LIST_MIN_FONT_SIZE_HUNDREDTHS,
+                WORD_LIST_MAX_FONT_SIZE_HUNDREDTHS,
+            )
+    }
+
     fn candidate_word(&self) -> Option<&'static str> {
         self.entropy_confirmed
             .then(|| word_for_entropy_bits(&self.word_indices, self.entropy_bits).ok())
@@ -414,6 +447,18 @@ impl LastWordFlow {
     fn clear_entropy(&mut self) {
         self.entropy_bits = 0;
         self.entropy_confirmed = false;
+    }
+}
+
+fn word_list_glyph_advance_units(character: u8) -> usize {
+    match character {
+        b' ' | b'f' | b't' => 160,
+        b'i' | b'j' | b'l' => 127,
+        b'm' => 479,
+        b'w' => 415,
+        b'k' | b's' | b'v' | b'x' | b'y' | b'z' => 288,
+        b'r' => 191,
+        _ => 320,
     }
 }
 
@@ -508,6 +553,10 @@ fn sync_mnemonic_view(window: &AppWindow, flow: &LastWordFlow) {
     window.set_mnemonic_prefix(flow.prefix_text().into());
     window.set_mnemonic_entry(flow.entry_text().into());
     window.set_mnemonic_message(flow.message().into());
+    window.set_mnemonic_confirmed_words(flow.confirmed_words_text().into());
+    window.set_mnemonic_confirmed_words_font_size_hundredths(
+        flow.confirmed_words_font_size_hundredths(),
+    );
     window.set_mnemonic_can_commit(flow.selected_word_index().is_some());
     window.set_mnemonic_next_letters(VecModel::from_slice(&flow.next_letter_enabled()));
     window.set_entropy_bits_label(flow.entropy_bits_label().into());
@@ -544,6 +593,32 @@ mod mnemonic_tests {
         assert_eq!(flow.selected_word_index(), word_index("act"));
         assert!(!flow.commit_word());
         assert_eq!(flow.word_indices[0], word_index("act").unwrap());
+    }
+
+    #[test]
+    fn keeps_confirmed_words_visible_after_commit() {
+        let mut flow = LastWordFlow::default();
+
+        enter_word(&mut flow, "act");
+
+        assert_eq!(flow.confirmed_words_text(), "act");
+        assert_eq!(flow.commit_feedback, CommitFeedback::None);
+    }
+
+    #[test]
+    fn shrinks_confirmed_words_to_fit_the_full_prefix() {
+        let mut flow = LastWordFlow::default();
+
+        enter_word(&mut flow, "act");
+        assert_eq!(
+            flow.confirmed_words_font_size_hundredths(),
+            WORD_LIST_MAX_FONT_SIZE_HUNDREDTHS
+        );
+
+        for _ in 0..(PREFIX_WORD_COUNT - 1) {
+            enter_word(&mut flow, "abandon");
+        }
+        assert_eq!(flow.confirmed_words_font_size_hundredths(), 1_110);
     }
 
     #[test]
@@ -606,18 +681,14 @@ mod mnemonic_tests {
     }
 
     #[test]
-    fn use_word_visibly_confirms_a_selected_word() {
+    fn use_word_adds_a_selected_word_to_progress() {
         let mut flow = LastWordFlow::default();
         for byte in b"act" {
             flow.push_letter(i32::from(*byte - b'a'));
         }
 
         assert!(!flow.commit_word());
-        assert_eq!(
-            flow.commit_feedback,
-            CommitFeedback::Confirmed { position: 1 }
-        );
-        assert_eq!(flow.message(), "Word 1 confirmed.");
+        assert_eq!(flow.confirmed_words_text(), "act");
     }
 
     #[test]
