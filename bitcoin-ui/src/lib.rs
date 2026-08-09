@@ -37,17 +37,11 @@ pub struct BatteryState {
     /// A voltage-derived battery percentage. `None` means no usable battery
     /// was detected, such as when the physical battery switch is off.
     pub percentage: Option<u8>,
+    /// Whether the PMU is actively pre-charging or fast-charging the battery.
     pub charging: bool,
-}
-
-/// Board facts that can be presented in the Settings screen.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DeviceStatus {
-    CameraDetected { sccb_address: u8 },
-    CameraNotDetected,
-    Battery(BatteryState),
-    BatteryUnavailable,
-    ChargerStateUnavailable { percentage: u8 },
+    /// Whether the compact indicator should present a static full battery.
+    /// This is mutually exclusive with [`Self::charging`].
+    pub charge_complete: bool,
 }
 
 /// The public, board-independent interface to the Bitcoin demo window.
@@ -77,47 +71,6 @@ impl WalletUi {
         self.window.show().map_err(|_| UiError)
     }
 
-    /// Presents typed board state without exposing Slint properties to the
-    /// firmware crate.
-    pub fn set_device_status(&self, status: DeviceStatus) {
-        match status {
-            DeviceStatus::CameraDetected { sccb_address } => self.window.set_device_status(
-                alloc::format!(
-                    "Camera Shield detected at SCCB address 0x{sccb_address:02X}. Battery status can be refreshed below."
-                )
-                .into(),
-            ),
-            DeviceStatus::CameraNotDetected => self.window.set_device_status(
-                "No Camera Shield sensor detected. Battery status can be refreshed below."
-                    .into(),
-            ),
-            DeviceStatus::Battery(state) => self.set_battery_state(state),
-            DeviceStatus::BatteryUnavailable => {
-                self.window.set_power_status_available(false);
-                self.window.set_battery_present(false);
-                self.window.set_device_status(
-                    "Battery status unavailable. Check the PMU connection and try again."
-                        .into(),
-                );
-            }
-            DeviceStatus::ChargerStateUnavailable { percentage } => {
-                self.window.set_power_status_available(true);
-                self.window.set_battery_present(true);
-                self.window
-                    .set_battery_percentage(i32::from(percentage.min(100)));
-                self.window.set_device_status(
-                    "Battery level updated, but charger state is unavailable."
-                        .into(),
-                );
-            }
-        }
-    }
-
-    /// Registers the one user action that needs a hardware refresh.
-    pub fn on_refresh_device_status(&self, handler: impl Fn() + 'static) {
-        self.window.on_request_device_status(handler);
-    }
-
     /// Registers a board-supplied source of random BIP39 prefix words.
     ///
     /// The UI never generates entropy itself. Firmware should use a hardware
@@ -142,33 +95,23 @@ impl WalletUi {
         Ok(())
     }
 
-    fn set_battery_state(&self, state: BatteryState) {
+    /// Updates the compact battery indicator from board-supplied facts.
+    pub fn set_battery_state(&self, state: BatteryState) {
         let percentage = state.percentage.unwrap_or(0).min(100);
-        self.window.set_power_status_available(true);
         self.window.set_usb_present(state.usb_present);
         self.window.set_battery_present(state.percentage.is_some());
         self.window.set_battery_percentage(i32::from(percentage));
-        self.window.set_device_status(
-            alloc::format!(
-                "USB: {} / Battery: {} / Charger: {}",
-                if state.usb_present {
-                    "connected"
-                } else {
-                    "disconnected"
-                },
-                if state.percentage.is_some() {
-                    alloc::format!("{percentage}%")
-                } else {
-                    String::from("unavailable")
-                },
-                if state.charging {
-                    "charging"
-                } else {
-                    "not charging"
-                }
-            )
-            .into(),
-        );
+        self.window.set_battery_charging(state.charging);
+        self.window.set_charge_complete(state.charge_complete);
+    }
+
+    /// Hides the compact battery indicator until a later PMU read succeeds.
+    pub fn set_battery_unavailable(&self) {
+        self.window.set_battery_present(false);
+        self.window.set_usb_present(false);
+        self.window.set_battery_percentage(0);
+        self.window.set_battery_charging(false);
+        self.window.set_charge_complete(false);
     }
 }
 
@@ -562,7 +505,6 @@ fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWordFlow>> {
 }
 
 fn sync_mnemonic_view(window: &AppWindow, flow: &LastWordFlow) {
-    window.set_mnemonic_word_count(flow.word_count as i32);
     window.set_mnemonic_prefix(flow.prefix_text().into());
     window.set_mnemonic_entry(flow.entry_text().into());
     window.set_mnemonic_message(flow.message().into());

@@ -1,15 +1,15 @@
 //! Async driver for the SY6970 single-cell battery charger and power-path IC.
 //!
-//! The LilyGO T-Display-S3 Pro exposes the SY6970 on I2C address
-//! `0x6A`. The driver deliberately preserves the board's factory-programmed
-//! charging limits during initialization.
+//! The LilyGO T-Display-S3 Pro exposes the SY6970 on I2C address `0x6A`.
+//! Initialization intentionally mirrors Jade's board backend and preserves the
+//! factory-programmed power-path and charging limits.
 
 use embedded_hal::i2c::Error;
 
 /// SY6970 I2C slave address.
 pub const SY6970_ADDRESS: u8 = 0x6A;
 
-/// The charger phase reported in the SY6970 system-status register.
+/// The charger phase reported in `REG0B.CHRG_STAT`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ChargeStatus {
@@ -30,18 +30,12 @@ impl ChargeStatus {
     }
 }
 
-/// Input and charge facts reported by the SY6970 system-status register.
-///
-/// `usb_present` describes a USB input source rather than an OTG output. The
-/// separate `input_power_good` bit indicates that the detected input is
-/// currently usable by the PMU.
+/// Input and charge facts decoded from the SY6970 status registers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SystemStatus {
-    /// A USB power source is connected to the board.
+    /// A physical USB input is reported by `REG11.BUS_GD`.
     pub usb_present: bool,
-    /// The connected input source is currently power-good.
-    pub input_power_good: bool,
     /// The current battery charge phase.
     pub charge_status: ChargeStatus,
 }

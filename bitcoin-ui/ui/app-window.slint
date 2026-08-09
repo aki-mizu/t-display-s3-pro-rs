@@ -6,24 +6,47 @@ component Bip39LetterKey inherits KeyButton {
     letter-key: true;
 }
 
-// A compact, original battery status indicator. External USB power makes the
-// battery orange, so a separate USB glyph is unnecessary. Battery percentage
-// stays internal so the display remains glanceable.
+// A compact, original battery status indicator. Battery percentage stays
+// internal so the display remains glanceable.
 component BatteryStatusIcon inherits Rectangle {
-    in property <bool> status-available: false;
     in property <bool> usb-present: false;
     in property <bool> battery-present: false;
     in property <int> battery-percentage: 0;
+    // `battery-charging` represents the active pre/fast-charge phase, while
+    // `charge-complete` selects the static-full presentation.
+    in property <bool> battery-charging: false;
+    in property <bool> charge-complete: false;
 
-    property <color> battery-color: !root.status-available || !root.battery-present ? BitcoinPalette.muted : root.usb-present ? BitcoinPalette.accent : root.battery-percentage <= 5 ? #ef4444 : root.battery-percentage <= 20 ? #f59e0b : BitcoinPalette.text;
+    property <bool> icon-visible: root.battery-present;
+    // Keep the external-power presentation stable even if the PMU briefly
+    // changes between charging sub-phases while a cable remains connected.
+    property <bool> external-power: root.icon-visible && root.usb-present;
+    property <bool> active-charge: root.external-power && root.battery-charging;
+    property <bool> complete-charge: root.external-power && root.charge-complete;
+    // Battery-only colors and bands mirror Jade: empty is red, its lowest
+    // non-empty band is orange, and all higher bands are white. USB power
+    // remains orange so active and completed charging stay easy to identify.
+    property <color> battery-color: root.external-power ? BitcoinPalette.accent : root.battery-percentage == 0 ? #ef4444 : root.battery-percentage <= 20 ? BitcoinPalette.accent : BitcoinPalette.text;
+    property <length> battery-fill-width: root.battery-percentage == 0 ? 0px : root.battery-percentage <= 20 ? 4px : root.battery-percentage <= 40 ? 7px : root.battery-percentage <= 60 ? 10px : root.battery-percentage <= 80 ? 13px : 17px;
+    // Repeat the familiar 20 → 50 → 80 → 100% charging sequence once every
+    // two seconds. A discrete timer redraws only four times per cycle;
+    // `animation-tick()` would otherwise keep the full display rendering at
+    // the touch-poll cadence even though the visible fill has not changed.
+    property <int> charging-phase: 0;
+    Timer {
+        running: root.active-charge;
+        interval: 500ms;
+        triggered => { root.charging-phase = mod(root.charging-phase + 1, 4); }
+    }
+    property <length> active-charge-fill-width: root.charging-phase == 0 ? 4px : root.charging-phase == 1 ? 9px : root.charging-phase == 2 ? 14px : 17px;
 
     width: 24px;
     height: 15px;
+    visible: root.icon-visible;
 
-    // Jade-style battery: white normally, orange when low, red when critical.
-    // External USB power makes it consistently orange.
+    // Battery-only states follow Jade's red/orange/white bands. Active
+    // charging animates orange; a completed charge is static full orange.
     Rectangle {
-        visible: root.status-available && root.battery-present;
         x: 0px;
         y: 2px;
         width: 21px;
@@ -34,7 +57,6 @@ component BatteryStatusIcon inherits Rectangle {
         border-radius: 1px;
     }
     Rectangle {
-        visible: root.status-available && root.battery-present;
         x: 21px;
         y: 5px;
         width: 2px;
@@ -43,10 +65,10 @@ component BatteryStatusIcon inherits Rectangle {
         border-radius: 1px;
     }
     Rectangle {
-        visible: root.status-available && root.battery-present;
+        // The animation branch is evaluated only while actively charging.
         x: 2px;
         y: 4px;
-        width: root.battery-percentage <= 5 ? 2px : root.battery-percentage <= 20 ? 4px : root.battery-percentage <= 40 ? 7px : root.battery-percentage <= 60 ? 10px : root.battery-percentage <= 80 ? 13px : 17px;
+        width: root.active-charge ? root.active-charge-fill-width : root.complete-charge ? 17px : root.battery-fill-width;
         height: 7px;
         background: root.battery-color;
         border-radius: 1px;
@@ -58,16 +80,15 @@ component BatteryStatusIcon inherits Rectangle {
 export component AppWindow inherits Window {
     // Board-supplied power facts, displayed as a compact always-visible
     // top-right indicator without exposing hardware APIs to the UI flow.
-    in-out property <bool> power-status-available: false;
     in-out property <bool> usb-present: false;
     in-out property <bool> battery-present: false;
     in-out property <int> battery-percentage: 0;
-    // Kept for the board wrapper's typed presentation API and diagnostics;
-    // the compact status icons below are the user-facing presentation.
-    in-out property <string> device-status: "";
-
+    // Charge phase bridge: `battery-charging` is active/pre-charge and
+    // `charge-complete` selects static-full. Both default to false so
+    // older firmware retains the static battery-only indicator.
+    in-out property <bool> battery-charging: false;
+    in-out property <bool> charge-complete: false;
     in-out property <int> current-screen: 0;
-    in-out property <int> mnemonic-word-count: 0;
     in-out property <string> mnemonic-prefix: "";
     in-out property <string> mnemonic-entry: "";
     in-out property <string> mnemonic-message: "Enter word 1 of 11.";
@@ -86,7 +107,6 @@ export component AppWindow inherits Window {
     in-out property <bool> entropy-bit-2: false;
     in-out property <bool> entropy-bit-1: false;
 
-    callback request-device-status();
     callback mnemonic-key(int);
     callback mnemonic-backspace();
     callback mnemonic-commit();
@@ -350,10 +370,11 @@ export component AppWindow inherits Window {
         BatteryStatusIcon {
             x: 454px;
             y: 2px;
-            status-available: root.power-status-available;
             usb-present: root.usb-present;
             battery-present: root.battery-present;
             battery-percentage: root.battery-percentage;
+            battery-charging: root.battery-charging;
+            charge-complete: root.charge-complete;
         }
     }
 }

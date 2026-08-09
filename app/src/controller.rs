@@ -1,9 +1,9 @@
-use bitcoin_ui::{BatteryState, DeviceStatus, MNEMONIC_PREFIX_WORD_COUNT, WalletUi};
+use bitcoin_ui::{BatteryState, MNEMONIC_PREFIX_WORD_COUNT, WalletUi};
 use embassy_futures::select::{Either, select};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embassy_time::{Duration, Ticker};
 use esp_hal::rng::Trng;
-use log::{error, info};
+use log::error;
 
 use crate::Charger;
 
@@ -13,49 +13,22 @@ pub struct Controller<'a> {
     last_power_state: Option<PresentedPowerState>,
 }
 
-#[derive(Debug, Clone)]
-enum Action {
-    RefreshDeviceStatus,
-    GenerateRandomWords,
-}
-
 /// The visible power facts painted into the UI. Retaining this separately from
 /// the full PMU snapshot lets the controller poll in the background without
-/// repainting when only a non-visible charge phase changes.
+/// repainting when no user-visible power fact changed.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum PresentedPowerState {
-    Available(PowerIndicator),
+    Available(BatteryState),
     Unavailable,
 }
 
-/// The compact indicator only presents USB presence and a quantized battery
-/// fill level. Charging-state samples remain available to the firmware but do
-/// not make the static icon redraw.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-struct PowerIndicator {
-    usb_present: bool,
-    percentage: Option<u8>,
-}
+type RandomWordRequestChannel = Channel<CriticalSectionRawMutex, (), 2>;
 
-type ActionChannelType = Channel<CriticalSectionRawMutex, Action, 2>;
+static RANDOM_WORD_REQUEST: RandomWordRequestChannel = Channel::new();
 
-static ACTION: ActionChannelType = Channel::new();
-
+// A two-second status cadence is plenty for the compact indicator and leaves
+// the shared I2C bus available for responsive touch input.
 const POWER_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
-
-/// Collapses a noisy voltage estimate into the six fill levels the battery
-/// icon can actually render. This prevents a one-percent ADC fluctuation from
-/// causing a needless status-bar repaint while the battery is not charging.
-fn battery_icon_percentage(percentage: Option<u8>) -> Option<u8> {
-    percentage.map(|percentage| match percentage {
-        0..=5 => 5,
-        6..=20 => 20,
-        21..=40 => 40,
-        41..=60 => 60,
-        61..=80 => 80,
-        _ => 100,
-    })
-}
 
 impl<'a> Controller<'a> {
     pub fn new(ui: &'a WalletUi, pmu: Charger) -> Self {
@@ -67,7 +40,7 @@ impl<'a> Controller<'a> {
     }
 
     pub async fn run(&mut self) {
-        self.set_action_event_handlers();
+        self.ui.on_request_random_words(request_random_words);
 
         if self.refresh_device_status().await.is_err() {
             error!("initial board-status refresh failed");
@@ -75,11 +48,10 @@ impl<'a> Controller<'a> {
 
         let mut power_status_ticker = Ticker::every(POWER_STATUS_REFRESH_INTERVAL);
         loop {
-            match select(ACTION.receive(), power_status_ticker.next()).await {
-                Either::First(action) => {
-                    info!("process action {:?}", &action);
-                    if self.process_action(action).await.is_err() {
-                        error!("process action failed");
+            match select(RANDOM_WORD_REQUEST.receive(), power_status_ticker.next()).await {
+                Either::First(()) => {
+                    if self.generate_random_words().is_err() {
+                        error!("random BIP39 prefix generation failed");
                     }
                 }
                 Either::Second(()) => {
@@ -89,14 +61,6 @@ impl<'a> Controller<'a> {
                 }
             }
         }
-    }
-
-    async fn process_action(&mut self, action: Action) -> Result<(), ()> {
-        match action {
-            Action::RefreshDeviceStatus => self.refresh_device_status().await?,
-            Action::GenerateRandomWords => self.generate_random_words()?,
-        }
-        Ok(())
     }
 
     /// Supplies the UI with a uniformly random 121-bit BIP39 prefix. The
@@ -118,33 +82,30 @@ impl<'a> Controller<'a> {
     }
 
     async fn refresh_device_status(&mut self) -> Result<(), ()> {
-        let battery_state = self
-            .pmu
-            .get_power_status()
-            .await
-            .map(|status| BatteryState {
-                usb_present: status.usb_present,
-                percentage: battery_icon_percentage(status.battery_percentage),
-                charging: status.charging,
-            });
-        let next_state = match battery_state {
-            Ok(state) => PresentedPowerState::Available(PowerIndicator {
-                usb_present: state.usb_present,
-                percentage: state.percentage,
-            }),
-            Err(e) => {
-                error!("Failed to read power status: {e:?}");
-                PresentedPowerState::Unavailable
+        let (battery_state, next_state) = match self.pmu.get_power_status().await {
+            Ok(status) => {
+                let state = BatteryState {
+                    usb_present: status.usb_present,
+                    percentage: status.battery_percentage,
+                    charging: status.charging,
+                    charge_complete: status.charge_complete,
+                };
+                let presentation = PresentedPowerState::Available(state);
+                (Ok(state), presentation)
+            }
+            Err(error) => {
+                error!("Failed to read power status: {error:?}");
+                (Err(error), PresentedPowerState::Unavailable)
             }
         };
 
         if self.last_power_state != Some(next_state) {
             match (next_state, battery_state) {
                 (PresentedPowerState::Available(_), Ok(state)) => {
-                    self.ui.set_device_status(DeviceStatus::Battery(state));
+                    self.ui.set_battery_state(state);
                 }
                 (PresentedPowerState::Unavailable, Err(_)) => {
-                    self.ui.set_device_status(DeviceStatus::BatteryUnavailable);
+                    self.ui.set_battery_unavailable();
                 }
                 _ => unreachable!("power presentation must match PMU read result"),
             }
@@ -156,22 +117,13 @@ impl<'a> Controller<'a> {
             PresentedPowerState::Unavailable => Err(()),
         }
     }
-
-    fn set_action_event_handlers(&self) {
-        self.ui
-            .on_refresh_device_status(|| send_action(Action::RefreshDeviceStatus));
-        self.ui
-            .on_request_random_words(|| send_action(Action::GenerateRandomWords));
-    }
 }
 
-fn send_action(action: Action) {
+fn request_random_words() {
     // The GUI callback is synchronous, so enqueue its hardware request without
     // blocking the Slint event loop.
-    match ACTION.try_send(action) {
+    match RANDOM_WORD_REQUEST.try_send(()) {
         Ok(_) => {}
-        Err(action) => {
-            error!("user action queue full, could not add: {action:?}")
-        }
+        Err(_) => error!("random-word request queue full"),
     }
 }

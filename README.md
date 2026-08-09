@@ -1,21 +1,18 @@
 # LilyGO T-Display-S3 Pro Rust Application
 
-An embedded Rust application for the LilyGO T-Display-S3 Pro and its optional Camera Shield. It uses the ST7796 display, CST226SE capacitive touch controller, SY6970 power-management IC, OPI PSRAM, and a Slint-based user interface.
+An embedded Rust BIP39 final-word helper for the LilyGO T-Display-S3 Pro. It uses the ST7796 display, CST226SE capacitive touch controller, SY6970 power-management IC, OPI PSRAM, and a Slint-based user interface.
 
 ## Features
 
 - **Display**: ST7796 IPS panel (222×480 physical, 480×222 landscape UI) over SPI
 - **Touch**: CST226SE capacitive touch controller over I²C
 - **Power**: SY6970 battery charger and power-management IC
-- **Camera Shield**: sensor power, 20 MHz camera clock, a safely disabled torch, and SCCB sensor probing
-- **Bitcoin UI demo**: compact account, receive, and PSBT-review screens sized for the 480×222 landscape display
+- **BIP39 helper**: local entry of eleven mnemonic words and calculation of valid final-word choices
 - **UI**: Slint embedded GUI in the board-independent `bitcoin-ui` crate, with asynchronous rendering in `app`
 
-Camera capture and preview are not implemented yet. Camera Shields can ship with different image sensors, so capture requires a sensor-specific SCCB initialization sequence and DVP capture configuration.
+## BIP39 Helper Safety
 
-## Bitcoin Demo Safety
-
-The Bitcoin screens are a local interface demonstration, not a wallet. Their balances, transaction review, and receive address are deliberately sample data. The firmware has no private keys, wallet persistence, transaction signing, network access, QR import, or PSBT parsing. Do not send funds to the displayed example address.
+The BIP39 helper is not a wallet. It does not derive keys, persist a mnemonic, sign transactions, access a network, import QR data, or parse PSBTs.
 
 The UI is an original board-sized implementation. It does not include KeyOS source code, assets, or dependencies.
 
@@ -49,16 +46,15 @@ The flash script uses the board's required DIO flash mode at 80 MHz.
 | I²C | SDA GPIO5, SCL GPIO6 |
 | SPI2 display | RST GPIO47, DC GPIO9, SCK GPIO18, MOSI GPIO17, CS GPIO39, BL GPIO48 |
 | Touch | IRQ GPIO21, RST GPIO13 |
-| Camera Shield control | PWDN GPIO46, torch GPIO38 |
-| Camera Shield DVP | VSYNC GPIO7, HREF GPIO15, XCLK GPIO11, PCLK GPIO2, D0…D7 GPIO45/GPIO41/GPIO40/GPIO42/GPIO1/GPIO3/GPIO10/GPIO4 |
+| Unused camera controls | PWDN GPIO46 held high, torch GPIO38 held low |
 
-The torch pin remains off until PWM brightness control is implemented, following the board vendor's guidance against driving it directly high.
+The camera controls are held in this safe state to avoid an unnecessary USB-only power load.
 
 ## Development
 
 For build instructions, architecture notes, and development guidelines, see [CLAUDE.md](./CLAUDE.md).
 
-The `bitcoin-ui` crate owns Slint components, screen navigation, UI actions, and presentation-state setters. The `app` crate owns the ESP32-S3 backend, display/touch integration, and hardware action handling.
+The `bip39-last-word` crate owns the BIP39 calculation. The `bitcoin-ui` crate owns Slint components and UI state; the `app` crate owns ESP32-S3 display, touch, power, and entropy integration.
 
 ## Contributing
 

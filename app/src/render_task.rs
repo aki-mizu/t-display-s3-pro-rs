@@ -39,15 +39,15 @@ pub async fn render_task(
         }
 
         // Draw the scene if something needs to be drawn
-        let is_dirty = window.draw_if_needed(|renderer| {
+        window.draw_if_needed(|renderer| {
             renderer.render_by_line(&mut buffer_provider);
         });
 
-        if !is_dirty {
-            // Match LilyGO's reference polling cadence closely enough to
-            // catch short controller reports without busy-spinning.
-            Timer::after_millis(5).await
-        }
+        // The CST226SE shares I²C0 with the SY6970 PMU.  Keep a fixed,
+        // human-responsive 50 Hz input cadence even while Slint is animating
+        // or repainting, rather than immediately starting another I²C touch
+        // read whenever the window stays dirty.
+        Timer::after_millis(20).await;
     }
 }
 

@@ -14,7 +14,7 @@ extern crate alloc;
 esp_bootloader_esp_idf::esp_app_desc!();
 
 use alloc::boxed::Box;
-use bitcoin_ui::{DeviceStatus, WalletUi};
+use bitcoin_ui::WalletUi;
 use controller::Controller;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
@@ -30,6 +30,7 @@ use esp_hal::i2c::master::I2c;
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::peripherals::I2C0;
 use esp_hal::rng::TrngSource;
+use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
 use log::{error, info};
 use render_task::render_task;
@@ -70,10 +71,8 @@ async fn main(spawner: Spawner) {
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
     info!("Embassy initialized!");
 
-    // Bring up the PMU before the display, camera, and touch controller add
-    // their startup load. In particular, this lets the USB-only safeguard
-    // disable SY6970 charging before a disconnected battery can brown out the
-    // system power path.
+    // Bring up the PMU before the display and touch controller add their
+    // startup load.
     let i2c_bus = initialize_i2c(
         peripherals.I2C0,
         peripherals.GPIO5.degrade(),
@@ -111,20 +110,10 @@ async fn main(spawner: Spawner) {
         .clear(Rgb565::new(0, 63, 0))
         .expect("Failed to draw display bring-up splash");
 
-    // The optional Camera Shield uses the same I2C bus for SCCB.
-    let _camera_shield = initialize_camera_shield(
-        peripherals.GPIO38.degrade(),
-        peripherals.GPIO46.degrade(),
-        peripherals.GPIO11.degrade(),
-        peripherals.LCD_CAM,
-        peripherals.DMA_CH1,
-    );
-    let camera_sensor_address = probe_camera_sensor(&mut I2cDevice::new(i2c_bus)).await;
-    if let Some(address) = camera_sensor_address {
-        info!("Camera Shield responded at SCCB address 0x{address:02X}");
-    } else {
-        info!("No Camera Shield sensor detected on the SCCB bus");
-    }
+    // This BIP39-only firmware does not use the camera hardware. Keep its
+    // sensor powered down and torch off to avoid an unnecessary USB-only load.
+    let _camera_torch = Output::new(peripherals.GPIO38, Level::Low, OutputConfig::default());
+    let _camera_power_down = Output::new(peripherals.GPIO46, Level::High, OutputConfig::default());
 
     // Create the GUI window for Slint's minimal software renderer
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
@@ -135,7 +124,7 @@ async fn main(spawner: Spawner) {
     let backend = Box::new(Backend::new(window.clone()));
     slint::platform::set_platform(backend).expect("set_platform failed");
 
-    // Initialize the touchpad interface for user interactions
+    // Initialize the touchpad interface for user interactions.
     let touchpad = match initialize_touchpad(
         I2cDevice::new(i2c_bus),
         peripherals.GPIO21.degrade(),
@@ -159,11 +148,6 @@ async fn main(spawner: Spawner) {
     let ui = WalletUi::new().expect("UI init failed");
     ui.show().expect("UI show failed");
 
-    ui.set_device_status(match camera_sensor_address {
-        Some(sccb_address) => DeviceStatus::CameraDetected { sccb_address },
-        None => DeviceStatus::CameraNotDetected,
-    });
-
     // Start the main event loop in the controller with the UI and PMU
     let mut controller = Controller::new(&ui, pmu);
     controller.run().await;
@@ -184,11 +168,16 @@ fn initialize_i2c(
     scl: AnyPin<'static>,
 ) -> &'static SharedI2cBus {
     // Create a new I2C master instance with default configuration
-    let i2c = I2c::new(i2c, esp_hal::i2c::master::Config::default())
-        .unwrap()
-        .with_sda(sda)
-        .with_scl(scl)
-        .into_async();
+    // The SY6970 and touch controller share this bus. Use the conservative
+    // 40 kHz rate proven reliable on this board.
+    let i2c = I2c::new(
+        i2c,
+        esp_hal::i2c::master::Config::default().with_frequency(Rate::from_khz(40)),
+    )
+    .unwrap()
+    .with_sda(sda)
+    .with_scl(scl)
+    .into_async();
 
     // Wrap it in a Mutex for sharing between devices
     static I2C_BUS: StaticCell<Mutex<CriticalSectionRawMutex, I2c<'static, Async>>> =
