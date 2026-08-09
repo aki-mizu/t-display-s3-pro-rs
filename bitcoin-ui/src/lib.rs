@@ -374,10 +374,7 @@ impl LastWordFlow {
             return String::from("All 11 words captured. Select the seven entropy bits.");
         }
 
-        alloc::format!(
-            "Word {} of {PREFIX_WORD_COUNT}. Tap Use word to confirm it.",
-            self.word_count + 1
-        )
+        String::new()
     }
 
     fn entropy_bits_label(&self) -> String {

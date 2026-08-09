@@ -127,8 +127,8 @@ export component AppWindow inherits Window {
         background: BitcoinPalette.page;
 
         if root.current-screen == 0: VerticalLayout {
-            padding-top: 3px;
-            padding-bottom: 3px;
+            padding-top: 4px;
+            padding-bottom: 2px;
             padding-left: 0px;
             padding-right: 0px;
             // A 48 px square is the largest uniform letter key that fits ten
@@ -141,15 +141,24 @@ export component AppWindow inherits Window {
 
                 Text {
                     text: "BIP39 final word";
+                    x: 0px;
+                    y: 0px;
+                    width: parent.width;
+                    height: parent.height;
                     color: BitcoinPalette.text;
                     font-size: 15px;
                     font-weight: 800;
                     horizontal-alignment: center;
+                    vertical-alignment: center;
                     visible: root.mnemonic-confirmed-words == "";
                 }
 
                 Text {
                     text: root.mnemonic-confirmed-words;
+                    x: 0px;
+                    y: 0px;
+                    width: parent.width;
+                    height: parent.height;
                     color: BitcoinPalette.text;
                     font-size: root.mnemonic-confirmed-words-font-size-hundredths * 0.01px;
                     font-weight: 800;
@@ -167,7 +176,7 @@ export component AppWindow inherits Window {
                 font-size: 9px;
                 horizontal-alignment: center;
                 overflow: elide;
-                visible: root.mnemonic-confirmed-words == "";
+                visible: root.mnemonic-message != "";
             }
 
             Rectangle {
