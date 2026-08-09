@@ -141,7 +141,6 @@ export component AppWindow inherits Window {
     in-out property <[bool]> mnemonic-next-letters: [];
     in-out property <string> candidate-word: "";
     in-out property <int> candidate-index: 0;
-    in-out property <string> entropy-bits-label: "0000000";
     in-out property <bool> entropy-bit-64: false;
     in-out property <bool> entropy-bit-32: false;
     in-out property <bool> entropy-bit-16: false;
@@ -367,14 +366,6 @@ export component AppWindow inherits Window {
                     padding: 3px;
                     spacing: 1px;
 
-                    Text {
-                        height: 12px;
-                        text: "Entropy bits: " + root.entropy-bits-label;
-                        color: BitcoinPalette.accent;
-                        font-size: 11px;
-                        font-weight: 800;
-                        horizontal-alignment: center;
-                    }
                     Text {
                         text: root.candidate-word == "" ? "Final word is not revealed." : "Candidate " + (root.candidate-index + 1) + " of 128: " + root.candidate-word;
                         color: BitcoinPalette.text;

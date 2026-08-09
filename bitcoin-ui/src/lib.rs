@@ -377,18 +377,6 @@ impl LastWordFlow {
         String::new()
     }
 
-    fn entropy_bits_label(&self) -> String {
-        let mut label = String::with_capacity(7);
-        for bit in (0..7).rev() {
-            label.push(if self.entropy_bits & (1_u8 << bit) == 0 {
-                '0'
-            } else {
-                '1'
-            });
-        }
-        label
-    }
-
     fn entropy_bit_is_set(&self, bit: u8) -> bool {
         self.entropy_bits & (1_u8 << bit) != 0
     }
@@ -556,7 +544,6 @@ fn sync_mnemonic_view(window: &AppWindow, flow: &LastWordFlow) {
     );
     window.set_mnemonic_can_commit(flow.selected_word_index().is_some());
     window.set_mnemonic_next_letters(VecModel::from_slice(&flow.next_letter_enabled()));
-    window.set_entropy_bits_label(flow.entropy_bits_label().into());
     window.set_entropy_bit_64(flow.entropy_bit_is_set(6));
     window.set_entropy_bit_32(flow.entropy_bit_is_set(5));
     window.set_entropy_bit_16(flow.entropy_bit_is_set(4));
