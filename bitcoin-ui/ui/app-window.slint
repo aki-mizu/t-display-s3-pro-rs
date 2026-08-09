@@ -305,16 +305,18 @@ export component AppWindow inherits Window {
             }
 
             Text {
-                text: "Eleven words leave 128 valid final-word candidates.";
-                color: BitcoinPalette.muted;
-                height: 12px;
-                font-size: 9px;
+                text: root.mnemonic-confirmed-words;
+                color: BitcoinPalette.text;
+                height: 24px;
+                font-size: root.mnemonic-confirmed-words-font-size-hundredths * 0.01px;
+                font-weight: 800;
                 horizontal-alignment: center;
-                overflow: elide;
+                vertical-alignment: center;
+                overflow: clip;
             }
 
             Rectangle {
-                height: 36px;
+                height: 30px;
                 background: BitcoinPalette.panel;
                 border-color: BitcoinPalette.border;
                 border-width: 1px;
