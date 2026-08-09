@@ -273,6 +273,23 @@ impl LastWordFlow {
         self.entropy_confirmed = false;
     }
 
+    fn set_entropy_die_face(&mut self, die: i32, face: i32) {
+        if !self.is_complete() {
+            return;
+        }
+
+        let Ok(face) = u8::try_from(face) else {
+            return;
+        };
+
+        self.entropy_bits = match die {
+            0 if (1..=8).contains(&face) => (self.entropy_bits & 0x0f) | ((face - 1) << 4),
+            1 if (1..=16).contains(&face) => (self.entropy_bits & 0x70) | (face - 1),
+            _ => return,
+        };
+        self.entropy_confirmed = false;
+    }
+
     fn confirm_entropy(&mut self) {
         if self.is_complete() {
             // This explicit action is required even when the selected value is
@@ -381,6 +398,30 @@ impl LastWordFlow {
         self.entropy_bits & (1_u8 << bit) != 0
     }
 
+    fn entropy_octal_value(&self) -> u8 {
+        self.entropy_bits >> 4
+    }
+
+    fn entropy_octal_face(&self) -> u8 {
+        self.entropy_octal_value() + 1
+    }
+
+    fn entropy_hex_value(&self) -> u8 {
+        self.entropy_bits & 0x0f
+    }
+
+    fn entropy_hex_face(&self) -> u8 {
+        self.entropy_hex_value() + 1
+    }
+
+    fn entropy_octal_bits(&self) -> String {
+        alloc::format!("{:03b}", self.entropy_octal_value())
+    }
+
+    fn entropy_hex_bits(&self) -> String {
+        alloc::format!("{:04b}", self.entropy_hex_value())
+    }
+
     /// Returns confirmed words separated by spaces for the input-progress row.
     fn confirmed_words_text(&self) -> String {
         if self.word_count == 0 {
@@ -423,10 +464,6 @@ impl LastWordFlow {
         self.entropy_confirmed
             .then(|| word_for_entropy_bits(&self.word_indices, self.entropy_bits).ok())
             .flatten()
-    }
-
-    fn candidate_index(&self) -> Option<u8> {
-        self.entropy_confirmed.then_some(self.entropy_bits)
     }
 
     fn clear_entropy(&mut self) {
@@ -520,6 +557,17 @@ fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWordFlow>> {
         }
     });
 
+    window.on_entropy_select_die({
+        let flow = Rc::clone(&flow);
+        let weak_window = weak_window.clone();
+        move |die, face| {
+            flow.borrow_mut().set_entropy_die_face(die, face);
+            if let Some(window) = weak_window.upgrade() {
+                sync_mnemonic_view(&window, &flow.borrow());
+            }
+        }
+    });
+
     window.on_entropy_confirm({
         let flow = Rc::clone(&flow);
         let weak_window = weak_window.clone();
@@ -544,6 +592,10 @@ fn sync_mnemonic_view(window: &AppWindow, flow: &LastWordFlow) {
     );
     window.set_mnemonic_can_commit(flow.selected_word_index().is_some());
     window.set_mnemonic_next_letters(VecModel::from_slice(&flow.next_letter_enabled()));
+    window.set_entropy_octal_face(i32::from(flow.entropy_octal_face()));
+    window.set_entropy_hex_face(i32::from(flow.entropy_hex_face()));
+    window.set_entropy_octal_bits(flow.entropy_octal_bits().into());
+    window.set_entropy_hex_bits(flow.entropy_hex_bits().into());
     window.set_entropy_bit_64(flow.entropy_bit_is_set(6));
     window.set_entropy_bit_32(flow.entropy_bit_is_set(5));
     window.set_entropy_bit_16(flow.entropy_bit_is_set(4));
@@ -552,7 +604,6 @@ fn sync_mnemonic_view(window: &AppWindow, flow: &LastWordFlow) {
     window.set_entropy_bit_2(flow.entropy_bit_is_set(1));
     window.set_entropy_bit_1(flow.entropy_bit_is_set(0));
     window.set_candidate_word(flow.candidate_word().unwrap_or("").into());
-    window.set_candidate_index(flow.candidate_index().map(i32::from).unwrap_or(0));
 }
 
 #[cfg(test)]
@@ -686,7 +737,6 @@ mod mnemonic_tests {
         assert_eq!(flow.candidate_word(), None);
         flow.confirm_entropy();
         assert_eq!(flow.candidate_word(), Some("about"));
-        assert_eq!(flow.candidate_index(), Some(0));
     }
 
     #[test]
@@ -700,6 +750,40 @@ mod mnemonic_tests {
 
         flow.toggle_entropy_bit(0);
         assert_eq!(flow.candidate_word(), None);
+    }
+
+    #[test]
+    fn dice_faces_update_the_shared_entropy_bits() {
+        let mut flow = LastWordFlow::default();
+        for _ in 0..PREFIX_WORD_COUNT {
+            enter_word(&mut flow, "abandon");
+        }
+
+        flow.set_entropy_die_face(0, 6);
+        flow.set_entropy_die_face(1, 13);
+
+        assert_eq!(flow.entropy_bits, 0b101_1100);
+        assert_eq!(flow.entropy_octal_value(), 5);
+        assert_eq!(flow.entropy_hex_value(), 12);
+        assert_eq!(flow.entropy_octal_face(), 6);
+        assert_eq!(flow.entropy_hex_face(), 13);
+        assert_eq!(flow.entropy_octal_bits(), "101");
+        assert_eq!(flow.entropy_hex_bits(), "1100");
+
+        flow.confirm_entropy();
+        assert!(flow.candidate_word().is_some());
+
+        flow.set_entropy_die_face(1, 14);
+        assert_eq!(flow.candidate_word(), None);
+
+        let entropy_bits = flow.entropy_bits;
+        flow.set_entropy_die_face(0, 0);
+        flow.set_entropy_die_face(1, 17);
+        assert_eq!(flow.entropy_bits, entropy_bits);
+
+        flow.set_entropy_die_face(0, 8);
+        flow.set_entropy_die_face(1, 16);
+        assert_eq!(flow.entropy_bits, 0b111_1111);
     }
 
     #[test]

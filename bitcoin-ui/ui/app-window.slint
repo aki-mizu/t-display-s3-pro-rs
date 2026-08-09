@@ -47,6 +47,62 @@ component EntropyBitKey inherits Rectangle {
     }
 }
 
+component EntropyDieCard inherits Rectangle {
+    in property <string> die-label: "";
+    in property <string> value-label: "";
+    in property <string> bits: "";
+    in property <bool> active: false;
+    callback clicked();
+
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: root.active ? BitcoinPalette.accent : BitcoinPalette.border;
+    background: root.active ? BitcoinPalette.panel-highlight : BitcoinPalette.panel;
+
+    Text {
+        x: 0px;
+        y: 5px;
+        width: parent.width;
+        height: 13px;
+        text: root.die-label;
+        color: root.active ? BitcoinPalette.accent : BitcoinPalette.muted;
+        font-size: 10px;
+        font-weight: 800;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    Text {
+        x: 0px;
+        y: 17px;
+        width: parent.width;
+        height: 44px;
+        text: root.value-label;
+        color: BitcoinPalette.text;
+        font-size: 32px;
+        font-weight: 800;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    Text {
+        x: 0px;
+        y: 64px;
+        width: parent.width;
+        height: 14px;
+        text: root.bits;
+        color: BitcoinPalette.accent;
+        font-size: 11px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
 // A compact, original battery status indicator. Battery percentage stays
 // internal so the display remains glanceable.
 component BatteryStatusIcon inherits Rectangle {
@@ -140,7 +196,12 @@ export component AppWindow inherits Window {
     // refreshes it after every edit so impossible next letters are disabled.
     in-out property <[bool]> mnemonic-next-letters: [];
     in-out property <string> candidate-word: "";
-    in-out property <int> candidate-index: 0;
+        in-out property <int> entropy-entry-mode: 0;
+        in-out property <int> entropy-picker: 0;
+        in-out property <int> entropy-octal-face: 1;
+        in-out property <int> entropy-hex-face: 1;
+        in-out property <string> entropy-octal-bits: "000";
+        in-out property <string> entropy-hex-bits: "0000";
     in-out property <bool> entropy-bit-64: false;
     in-out property <bool> entropy-bit-32: false;
     in-out property <bool> entropy-bit-16: false;
@@ -155,6 +216,7 @@ export component AppWindow inherits Window {
     callback mnemonic-reset();
     callback request-random-words();
     callback entropy-toggle(int);
+        callback entropy-select-die(int, int);
     callback entropy-confirm();
 
     width: 480px;
@@ -335,19 +397,39 @@ export component AppWindow inherits Window {
             padding: 3px;
             spacing: 2px;
 
-            Text {
-                text: "Enter the seven entropy bits";
-                color: BitcoinPalette.text;
-                height: 15px;
-                font-size: 15px;
-                font-weight: 800;
-                horizontal-alignment: center;
+            HorizontalLayout {
+                height: 30px;
+                padding-right: 28px;
+                spacing: 2px;
+
+                Text {
+                    width: 220px;
+                    text: "Entropy entry";
+                    color: BitcoinPalette.text;
+                    font-size: 15px;
+                    font-weight: 800;
+                    vertical-alignment: center;
+                }
+                KeyButton {
+                    width: 96px;
+                    height: 30px;
+                    label: "Bits";
+                    active: root.entropy-entry-mode == 0;
+                    clicked => { root.entropy-entry-mode = 0; root.entropy-picker = 0; }
+                }
+                KeyButton {
+                    width: 96px;
+                    height: 30px;
+                    label: "Dice";
+                    active: root.entropy-entry-mode == 1;
+                    clicked => { root.entropy-entry-mode = 1; root.entropy-picker = 0; }
+                }
             }
 
             Text {
                 text: root.mnemonic-confirmed-words;
                 color: BitcoinPalette.text;
-                height: 24px;
+                height: 20px;
                 font-size: root.mnemonic-confirmed-words-font-size-hundredths * 0.01px;
                 font-weight: 800;
                 horizontal-alignment: center;
@@ -356,7 +438,7 @@ export component AppWindow inherits Window {
             }
 
             Rectangle {
-                height: 30px;
+                height: 28px;
                 background: BitcoinPalette.panel;
                 border-color: BitcoinPalette.border;
                 border-width: 1px;
@@ -367,7 +449,7 @@ export component AppWindow inherits Window {
                     spacing: 1px;
 
                     Text {
-                        text: root.candidate-word == "" ? "Final word is not revealed." : "Candidate " + (root.candidate-index + 1) + " of 128: " + root.candidate-word;
+                        text: root.candidate-word == "" ? "Final word is not revealed." : "Final word: " + root.candidate-word;
                         color: BitcoinPalette.text;
                         font-size: 12px;
                         font-weight: 800;
@@ -378,41 +460,65 @@ export component AppWindow inherits Window {
                 }
             }
 
-            HorizontalLayout {
-                height: 94px;
+            if root.entropy-entry-mode == 0: HorizontalLayout {
+                height: 88px;
                 spacing: 2px;
 
-                EntropyBitKey { width: 66px; height: 94px; position: 1; active: root.entropy-bit-64; clicked => { root.entropy-toggle(6); } }
-                EntropyBitKey { width: 66px; height: 94px; position: 2; active: root.entropy-bit-32; clicked => { root.entropy-toggle(5); } }
-                EntropyBitKey { width: 66px; height: 94px; position: 3; active: root.entropy-bit-16; clicked => { root.entropy-toggle(4); } }
-                EntropyBitKey { width: 66px; height: 94px; position: 4; active: root.entropy-bit-8; clicked => { root.entropy-toggle(3); } }
-                EntropyBitKey { width: 66px; height: 94px; position: 5; active: root.entropy-bit-4; clicked => { root.entropy-toggle(2); } }
-                EntropyBitKey { width: 66px; height: 94px; position: 6; active: root.entropy-bit-2; clicked => { root.entropy-toggle(1); } }
-                EntropyBitKey { width: 66px; height: 94px; position: 7; active: root.entropy-bit-1; clicked => { root.entropy-toggle(0); } }
+                EntropyBitKey { width: 66px; height: 88px; position: 1; active: root.entropy-bit-64; clicked => { root.entropy-toggle(6); } }
+                EntropyBitKey { width: 66px; height: 88px; position: 2; active: root.entropy-bit-32; clicked => { root.entropy-toggle(5); } }
+                EntropyBitKey { width: 66px; height: 88px; position: 3; active: root.entropy-bit-16; clicked => { root.entropy-toggle(4); } }
+                EntropyBitKey { width: 66px; height: 88px; position: 4; active: root.entropy-bit-8; clicked => { root.entropy-toggle(3); } }
+                EntropyBitKey { width: 66px; height: 88px; position: 5; active: root.entropy-bit-4; clicked => { root.entropy-toggle(2); } }
+                EntropyBitKey { width: 66px; height: 88px; position: 6; active: root.entropy-bit-2; clicked => { root.entropy-toggle(1); } }
+                EntropyBitKey { width: 66px; height: 88px; position: 7; active: root.entropy-bit-1; clicked => { root.entropy-toggle(0); } }
+            }
+
+            if root.entropy-entry-mode == 1: HorizontalLayout {
+                height: 88px;
+                spacing: 4px;
+
+                EntropyDieCard {
+                    width: 235px;
+                    height: 88px;
+                    die-label: "D8 ROLL (1-8)";
+                    value-label: "" + root.entropy-octal-face;
+                    bits: root.entropy-octal-bits;
+                    active: root.entropy-picker == 1;
+                    clicked => { root.entropy-picker = 1; }
+                }
+                EntropyDieCard {
+                    width: 235px;
+                    height: 88px;
+                    die-label: "D16 ROLL (1-16)";
+                    value-label: "" + root.entropy-hex-face;
+                    bits: root.entropy-hex-bits;
+                    active: root.entropy-picker == 2;
+                    clicked => { root.entropy-picker = 2; }
+                }
             }
 
             HorizontalLayout {
-                height: 44px;
+                height: 42px;
                 padding-left: 1px;
                 padding-right: 1px;
                 spacing: 2px;
 
                 KeyButton {
                     width: 156px;
-                    height: 44px;
+                    height: 42px;
                     label: "Edit words";
                     clicked => { root.current-screen = 0; }
                 }
                 KeyButton {
                     width: 156px;
-                    height: 44px;
-                    label: "Reveal final word";
+                    height: 42px;
+                    label: "Confirm entropy";
                     active: true;
                     clicked => { root.entropy-confirm(); }
                 }
                 KeyButton {
                     width: 156px;
-                    height: 44px;
+                    height: 42px;
                     label: "Start over";
                     clicked => { root.mnemonic-reset(); root.current-screen = 0; }
                 }
@@ -427,6 +533,117 @@ export component AppWindow inherits Window {
             battery-percentage: root.battery-percentage;
             battery-charging: root.battery-charging;
             charge-complete: root.charge-complete;
+        }
+
+        if root.entropy-picker != 0: Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: parent.height;
+            background: BitcoinPalette.page;
+
+            TouchArea {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: parent.height;
+                clicked => { root.entropy-picker = 0; }
+            }
+
+            VerticalLayout {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: parent.height;
+                padding: 6px;
+                spacing: 4px;
+
+                HorizontalLayout {
+                    height: 34px;
+                    spacing: 4px;
+
+                    Text {
+                        width: 352px;
+                        text: root.entropy-picker == 1 ? "Select D8 roll (1-8)" : "Select D16 roll (1-16)";
+                        color: BitcoinPalette.text;
+                        font-size: 15px;
+                        font-weight: 800;
+                        vertical-alignment: center;
+                    }
+                    KeyButton {
+                        width: 112px;
+                        height: 34px;
+                        label: "Cancel";
+                        clicked => { root.entropy-picker = 0; }
+                    }
+                }
+
+                if root.entropy-picker == 1: VerticalLayout {
+                    height: 168px;
+                    spacing: 4px;
+
+                    HorizontalLayout {
+                        height: 82px;
+                        spacing: 4px;
+
+                        KeyButton { width: 114px; height: 82px; label: "1"; active: root.entropy-octal-face == 1; clicked => { root.entropy-select-die(0, 1); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 82px; label: "2"; active: root.entropy-octal-face == 2; clicked => { root.entropy-select-die(0, 2); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 82px; label: "3"; active: root.entropy-octal-face == 3; clicked => { root.entropy-select-die(0, 3); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 82px; label: "4"; active: root.entropy-octal-face == 4; clicked => { root.entropy-select-die(0, 4); root.entropy-picker = 0; } }
+                    }
+                    HorizontalLayout {
+                        height: 82px;
+                        spacing: 4px;
+
+                        KeyButton { width: 114px; height: 82px; label: "5"; active: root.entropy-octal-face == 5; clicked => { root.entropy-select-die(0, 5); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 82px; label: "6"; active: root.entropy-octal-face == 6; clicked => { root.entropy-select-die(0, 6); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 82px; label: "7"; active: root.entropy-octal-face == 7; clicked => { root.entropy-select-die(0, 7); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 82px; label: "8"; active: root.entropy-octal-face == 8; clicked => { root.entropy-select-die(0, 8); root.entropy-picker = 0; } }
+                    }
+                }
+
+                if root.entropy-picker == 2: VerticalLayout {
+                    height: 168px;
+                    spacing: 4px;
+
+                    HorizontalLayout {
+                        height: 39px;
+                        spacing: 4px;
+
+                        KeyButton { width: 114px; height: 39px; label: "1"; active: root.entropy-hex-face == 1; clicked => { root.entropy-select-die(1, 1); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 39px; label: "2"; active: root.entropy-hex-face == 2; clicked => { root.entropy-select-die(1, 2); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 39px; label: "3"; active: root.entropy-hex-face == 3; clicked => { root.entropy-select-die(1, 3); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 39px; label: "4"; active: root.entropy-hex-face == 4; clicked => { root.entropy-select-die(1, 4); root.entropy-picker = 0; } }
+                    }
+                    HorizontalLayout {
+                        height: 39px;
+                        spacing: 4px;
+
+                        KeyButton { width: 114px; height: 39px; label: "5"; active: root.entropy-hex-face == 5; clicked => { root.entropy-select-die(1, 5); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 39px; label: "6"; active: root.entropy-hex-face == 6; clicked => { root.entropy-select-die(1, 6); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 39px; label: "7"; active: root.entropy-hex-face == 7; clicked => { root.entropy-select-die(1, 7); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 39px; label: "8"; active: root.entropy-hex-face == 8; clicked => { root.entropy-select-die(1, 8); root.entropy-picker = 0; } }
+                    }
+                    HorizontalLayout {
+                        height: 39px;
+                        spacing: 4px;
+
+                        KeyButton { width: 114px; height: 39px; label: "9"; active: root.entropy-hex-face == 9; clicked => { root.entropy-select-die(1, 9); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 39px; label: "10"; active: root.entropy-hex-face == 10; clicked => { root.entropy-select-die(1, 10); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 39px; label: "11"; active: root.entropy-hex-face == 11; clicked => { root.entropy-select-die(1, 11); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 39px; label: "12"; active: root.entropy-hex-face == 12; clicked => { root.entropy-select-die(1, 12); root.entropy-picker = 0; } }
+                    }
+                    HorizontalLayout {
+                        height: 39px;
+                        spacing: 4px;
+
+                        KeyButton { width: 114px; height: 39px; label: "13"; active: root.entropy-hex-face == 13; clicked => { root.entropy-select-die(1, 13); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 39px; label: "14"; active: root.entropy-hex-face == 14; clicked => { root.entropy-select-die(1, 14); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 39px; label: "15"; active: root.entropy-hex-face == 15; clicked => { root.entropy-select-die(1, 15); root.entropy-picker = 0; } }
+                        KeyButton { width: 114px; height: 39px; label: "16"; active: root.entropy-hex-face == 16; clicked => { root.entropy-select-die(1, 16); root.entropy-picker = 0; } }
+                    }
+                }
+            }
         }
     }
 }
