@@ -13,4 +13,5 @@ slint = { version = "1.16.1", default-features = false, features = [
 ] }
 
 [build-dependencies]
-slint-build = "1.16.1"
+bip39 = { version = "2.2.2", default-features = false, features = ["chinese-simplified"] }
+slint-build = { version = "1.16.1", features = ["sdf-fonts"] }

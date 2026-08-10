@@ -1,7 +1,7 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
-//! Allocation-free BIP39 final-word calculation for an English 12-word mnemonic.
+//! Allocation-free BIP39 final-word calculation for a 12-word mnemonic.
 //!
 //! Eleven BIP39 words contain 121 of the 128 entropy bits. The remaining seven
 //! entropy bits must be supplied explicitly; each choice produces one of the
@@ -22,12 +22,127 @@ const CHECKSUM_BITS: u32 = 4;
 const UNKNOWN_ENTROPY_BITS: u32 = 7;
 const MAX_ENTROPY_BITS: u8 = 0b0111_1111;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PinyinEntry {
+    spelling: &'static str,
+    index: u16,
+}
+
+include!(concat!(env!("OUT_DIR"), "/simplified_chinese_pinyin.rs"));
+
+/// Allocation-free pinyin matches for the Simplified Chinese BIP39 word list.
+///
+/// Pinyin is only an input aid. Resolve a returned index to its canonical
+/// Chinese BIP39 character before accepting it as a mnemonic word.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SimplifiedChinesePinyinMatches {
+    entries: &'static [PinyinEntry],
+}
+
+impl SimplifiedChinesePinyinMatches {
+    /// Returns the number of distinct BIP39 words matched by the pinyin prefix.
+    pub fn len(&self) -> usize {
+        (0..self.entries.len())
+            .filter(|position| self.is_first_entry_for_index(*position))
+            .count()
+    }
+
+    /// Returns whether the pinyin prefix matches no BIP39 words.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Returns the BIP39 word index at the distinct candidate position.
+    pub fn word_index_at(&self, candidate_position: usize) -> Option<u16> {
+        let mut distinct_position = 0;
+        for (entry_position, entry) in self.entries.iter().enumerate() {
+            if !self.is_first_entry_for_index(entry_position) {
+                continue;
+            }
+            if distinct_position == candidate_position {
+                return Some(entry.index);
+            }
+            distinct_position += 1;
+        }
+
+        None
+    }
+
+    fn is_first_entry_for_index(&self, entry_position: usize) -> bool {
+        let index = self.entries[entry_position].index;
+        !self.entries[..entry_position]
+            .iter()
+            .any(|entry| entry.index == index)
+    }
+}
+
+/// Returns the Simplified Chinese BIP39 words whose tone-free pinyin starts with `prefix`.
+///
+/// Pinyin aliases such as `v` for umlaut-u are normalized while the static table
+/// is generated. Each Chinese character occurs at most once in the result even
+/// when it has multiple pronunciations.
+pub fn simplified_chinese_words_by_pinyin_prefix(prefix: &str) -> SimplifiedChinesePinyinMatches {
+    if !prefix.bytes().all(|byte| byte.is_ascii_lowercase()) {
+        return SimplifiedChinesePinyinMatches { entries: &[] };
+    }
+
+    let Some(first) = SIMPLIFIED_CHINESE_PINYIN_ENTRIES
+        .iter()
+        .position(|entry| entry.spelling.starts_with(prefix))
+    else {
+        return SimplifiedChinesePinyinMatches { entries: &[] };
+    };
+    let count = SIMPLIFIED_CHINESE_PINYIN_ENTRIES[first..]
+        .iter()
+        .take_while(|entry| entry.spelling.starts_with(prefix))
+        .count();
+
+    SimplifiedChinesePinyinMatches {
+        entries: &SIMPLIFIED_CHINESE_PINYIN_ENTRIES[first..first + count],
+    }
+}
+
+/// Returns the pinyin letters that can continue a Simplified Chinese BIP39 prefix.
+pub fn simplified_chinese_next_pinyin_letters(prefix: &str) -> [bool; 26] {
+    let mut enabled = [false; 26];
+
+    for entry in simplified_chinese_words_by_pinyin_prefix(prefix).entries {
+        let Some(next) = entry.spelling.as_bytes().get(prefix.len()).copied() else {
+            continue;
+        };
+        if next.is_ascii_lowercase() {
+            enabled[usize::from(next - b'a')] = true;
+        }
+    }
+
+    enabled
+}
+
+/// BIP39 word lists supported by the final-word helper.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum MnemonicLanguage {
+    /// The English BIP39 word list.
+    #[default]
+    English,
+    /// The Simplified Chinese BIP39 word list.
+    SimplifiedChinese,
+}
+
+impl MnemonicLanguage {
+    fn bip39_language(self) -> Language {
+        match self {
+            Self::English => Language::English,
+            Self::SimplifiedChinese => Language::SimplifiedChinese,
+        }
+    }
+}
+
 /// Input validation failure while calculating a final BIP39 word.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Error {
-    /// A word is not an exact lowercase English BIP39 word.
+    /// A word is not an exact BIP39 word in the selected word list.
     UnknownWord { position: usize },
-    /// A caller-provided BIP39 word index is outside the English word list.
+    /// A caller-provided BIP39 word index is outside the BIP39 word list.
     InvalidWordIndex { position: usize, index: u16 },
     /// The seven remaining entropy bits must be in the range `0..=127`.
     InvalidEntropyBits { value: u8 },
@@ -53,12 +168,12 @@ impl LastWordCandidates {
         false
     }
 
-    /// Returns the English BIP39 indices for all candidates.
+    /// Returns the BIP39 indices for all candidates.
     pub fn word_indices(&self) -> &[u16; CANDIDATE_COUNT] {
         &self.word_indices
     }
 
-    /// Returns the candidate's English BIP39 word index for the given seven bits.
+    /// Returns the candidate's BIP39 word index for the given seven bits.
     pub fn word_index_for_entropy_bits(&self, entropy_bits: u8) -> Result<u16, Error> {
         self.word_indices
             .get(usize::from(entropy_bits))
@@ -76,6 +191,15 @@ impl LastWordCandidates {
             index,
         })
     }
+}
+
+/// Resolves a BIP39 word index to its word in the requested language.
+pub fn word_for_index_in(language: MnemonicLanguage, index: u16) -> Option<&'static str> {
+    language
+        .bip39_language()
+        .word_list()
+        .get(usize::from(index))
+        .copied()
 }
 
 /// Resolves an exact lowercase English BIP39 word to its index.
@@ -142,8 +266,9 @@ pub fn candidates_from_indices(
     Ok(LastWordCandidates { word_indices })
 }
 
-/// Calculates one final word from eleven English BIP39 indices and seven entropy bits.
-pub fn word_for_entropy_bits(
+/// Calculates one final word in the requested language from eleven BIP39 indices and seven entropy bits.
+pub fn word_for_entropy_bits_in(
+    language: MnemonicLanguage,
     indices: &[u16; PREFIX_WORD_COUNT],
     entropy_bits: u8,
 ) -> Result<&'static str, Error> {
@@ -151,10 +276,18 @@ pub fn word_for_entropy_bits(
     validate_entropy_bits(entropy_bits)?;
 
     let index = final_word_index(prefix, entropy_bits);
-    word_for_index(index).ok_or(Error::InvalidWordIndex {
+    word_for_index_in(language, index).ok_or(Error::InvalidWordIndex {
         position: PREFIX_WORD_COUNT,
         index,
     })
+}
+
+/// Calculates one final English word from eleven BIP39 indices and seven entropy bits.
+pub fn word_for_entropy_bits(
+    indices: &[u16; PREFIX_WORD_COUNT],
+    entropy_bits: u8,
+) -> Result<&'static str, Error> {
+    word_for_entropy_bits_in(MnemonicLanguage::English, indices, entropy_bits)
 }
 
 fn entropy_prefix(indices: &[u16; PREFIX_WORD_COUNT]) -> Result<u128, Error> {
@@ -273,5 +406,32 @@ mod tests {
         assert_eq!(words_by_prefix("aban"), ["abandon"]);
         assert!(words_by_prefix("not-a-bip39-prefix").is_empty());
         assert!(words_by_prefix("act").contains(&"act"));
+    }
+
+    #[test]
+    fn resolves_simplified_chinese_words_and_pinyin() {
+        let language = MnemonicLanguage::SimplifiedChinese;
+        assert_eq!(word_for_index_in(language, 0), Some("\u{7684}"));
+
+        let de_matches = simplified_chinese_words_by_pinyin_prefix("de");
+        assert!(
+            (0..de_matches.len()).any(|position| de_matches.word_index_at(position) == Some(0))
+        );
+
+        let xing_matches = simplified_chinese_words_by_pinyin_prefix("xing");
+        assert!(
+            (0..xing_matches.len())
+                .any(|position| xing_matches.word_index_at(position) == Some(56))
+        );
+        let hang_matches = simplified_chinese_words_by_pinyin_prefix("hang");
+        assert!(
+            (0..hang_matches.len())
+                .any(|position| hang_matches.word_index_at(position) == Some(56))
+        );
+
+        assert_eq!(
+            word_for_entropy_bits_in(language, &[0; PREFIX_WORD_COUNT], 0),
+            Ok("\u{5728}")
+        );
     }
 }

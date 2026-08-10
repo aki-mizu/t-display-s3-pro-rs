@@ -13,6 +13,8 @@ export global BitcoinPalette {
 
 export component KeyButton inherits Rectangle {
     in-out property <string> label: "";
+    in property <string> label-font-family: "";
+    in property <length> label-font-size: 12px;
     // `active` is a selected/toggled state (for example, an entropy bit).
     // `enabled` controls whether this button can receive input at all.
     in-out property <bool> active: false;
@@ -32,7 +34,8 @@ export component KeyButton inherits Rectangle {
     Text {
         text: root.label;
         color: active ? #211204 : letter-key ? (enabled ? BitcoinPalette.text : #526176) : BitcoinPalette.text;
-        font-size: 12px;
+        font-family: root.label-font-family;
+        font-size: root.label-font-size;
         font-weight: 700;
         horizontal-alignment: center;
         vertical-alignment: center;

@@ -1,4 +1,6 @@
 import { BitcoinPalette, KeyButton } from "common.slint";
+import { SimplifiedChineseGlyphCoverage } from "bip39-chinese-glyphs.slint";
+import "fonts/NotoSansSC-BIP39.otf";
 
 // Keeps the BIP39 keyboard's high-contrast availability treatment separate
 // from generic action buttons such as Reset and Back.
@@ -186,6 +188,8 @@ export component AppWindow inherits Window {
     in-out property <bool> battery-charging: false;
     in-out property <bool> charge-complete: false;
     in-out property <int> current-screen: 0;
+    in-out property <int> mnemonic-language: 0;
+    in-out property <bool> mnemonic-language-selection-visible: true;
     in-out property <string> mnemonic-prefix: "";
     in-out property <string> mnemonic-entry: "";
     in-out property <string> mnemonic-message: "Enter word 1 of 11.";
@@ -195,6 +199,11 @@ export component AppWindow inherits Window {
     // One entry per lowercase English letter (a=0 through z=25). Rust
     // refreshes it after every edit so impossible next letters are disabled.
     in-out property <[bool]> mnemonic-next-letters: [];
+    in-out property <bool> mnemonic-pinyin-picker-open: false;
+    in-out property <[string]> mnemonic-pinyin-candidates: [];
+    in-out property <string> mnemonic-pinyin-page-label: "";
+    in-out property <bool> mnemonic-pinyin-has-previous-page: false;
+    in-out property <bool> mnemonic-pinyin-has-next-page: false;
     in-out property <string> candidate-word: "";
     in-out property <bool> entropy-confirmed: false;
         in-out property <int> entropy-entry-mode: 0;
@@ -212,9 +221,13 @@ export component AppWindow inherits Window {
     in-out property <bool> entropy-bit-1: false;
 
     callback mnemonic-key(int);
+    callback mnemonic-select-language(int);
     callback mnemonic-backspace();
     callback mnemonic-commit();
     callback mnemonic-reset();
+    callback mnemonic-select-pinyin-candidate(int);
+    callback mnemonic-change-pinyin-page(int);
+    callback mnemonic-dismiss-pinyin-picker();
     callback request-random-words();
     callback entropy-toggle(int);
         callback entropy-select-die(int, int);
@@ -229,7 +242,9 @@ export component AppWindow inherits Window {
         height: 222px;
         background: BitcoinPalette.page;
 
-        if root.current-screen == 0: VerticalLayout {
+        SimplifiedChineseGlyphCoverage { }
+
+        if root.current-screen == 0 && !root.mnemonic-pinyin-picker-open: VerticalLayout {
             padding-top: 4px;
             padding-bottom: 2px;
             padding-left: 0px;
@@ -239,32 +254,56 @@ export component AppWindow inherits Window {
             spacing: 0px;
 
             Rectangle {
-                height: root.mnemonic-confirmed-words == "" ? 15px : 36px;
+                height: root.mnemonic-confirmed-words == "" ? 24px : 30px;
                 background: #00000000;
 
                 Text {
                     text: "BIP39 final word";
                     x: 0px;
                     y: 0px;
-                    width: parent.width;
-                    height: parent.height;
+                    width: root.mnemonic-language-selection-visible ? 170px : 448px;
+                    height: 24px;
                     color: BitcoinPalette.text;
-                    font-size: 15px;
+                    font-size: 13px;
                     font-weight: 800;
                     horizontal-alignment: center;
                     vertical-alignment: center;
                     visible: root.mnemonic-confirmed-words == "";
                 }
 
+                KeyButton {
+                    x: 172px;
+                    y: 2px;
+                    width: 124px;
+                    height: 20px;
+                    label: "English";
+                    active: root.mnemonic-language == 0;
+                    visible: root.mnemonic-language-selection-visible;
+                    enabled: root.mnemonic-language-selection-visible;
+                    clicked => { root.mnemonic-select-language(0); }
+                }
+                KeyButton {
+                    x: 300px;
+                    y: 2px;
+                    width: 124px;
+                    height: 20px;
+                    label: "Chinese";
+                    active: root.mnemonic-language == 1;
+                    visible: root.mnemonic-language-selection-visible;
+                    enabled: root.mnemonic-language-selection-visible;
+                    clicked => { root.mnemonic-select-language(1); }
+                }
+
                 Text {
                     text: root.mnemonic-confirmed-words;
-                    x: 0px;
+                    x: 2px;
                     y: 0px;
-                    width: parent.width;
+                    width: 448px;
                     height: parent.height;
                     color: BitcoinPalette.text;
                     font-size: root.mnemonic-confirmed-words-font-size-hundredths * 0.01px;
-                    font-weight: 800;
+                    font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : "";
+                    font-weight: root.mnemonic-language == 1 ? 400 : 800;
                     horizontal-alignment: center;
                     vertical-alignment: center;
                     overflow: clip;
@@ -283,7 +322,7 @@ export component AppWindow inherits Window {
             }
 
             Rectangle {
-                height: root.mnemonic-confirmed-words == "" ? 47px : 36px;
+                height: root.mnemonic-confirmed-words == "" ? 44px : 48px;
                 background: BitcoinPalette.panel;
                 border-color: BitcoinPalette.border;
                 border-width: 1px;
@@ -297,8 +336,8 @@ export component AppWindow inherits Window {
                     spacing: 3px;
 
                     Text {
-                        width: 70px;
-                        text: root.mnemonic-prefix == "" ? "Input: —" : "Input: " + root.mnemonic-prefix;
+                        width: 76px;
+                        text: root.mnemonic-prefix == "" ? (root.mnemonic-language == 1 ? "Pinyin: -" : "Input: -") : (root.mnemonic-language == 1 ? "Pinyin: " : "Input: ") + root.mnemonic-prefix;
                         color: BitcoinPalette.accent;
                         font-size: 11px;
                         font-weight: 700;
@@ -306,7 +345,7 @@ export component AppWindow inherits Window {
                         overflow: elide;
                     }
                     Text {
-                        width: 211px;
+                        width: 205px;
                         text: root.mnemonic-entry;
                         color: BitcoinPalette.text;
                         font-size: 11px;
@@ -315,14 +354,14 @@ export component AppWindow inherits Window {
                     }
                     KeyButton {
                         width: 104px;
-                        height: root.mnemonic-confirmed-words == "" ? 45px : 34px;
+                        height: root.mnemonic-confirmed-words == "" ? 42px : 46px;
                         label: "Use word";
                         active: root.mnemonic-can-commit;
                         clicked => { root.mnemonic-commit(); }
                     }
                     KeyButton {
                         width: 70px;
-                        height: root.mnemonic-confirmed-words == "" ? 45px : 34px;
+                        height: root.mnemonic-confirmed-words == "" ? 42px : 46px;
                         label: "Reset";
                         clicked => { root.mnemonic-reset(); }
                     }
@@ -330,42 +369,42 @@ export component AppWindow inherits Window {
             }
 
             HorizontalLayout {
-                height: 48px;
+                height: 46px;
                 padding-left: 0px;
                 padding-right: 0px;
                 spacing: 0px;
 
-                Bip39LetterKey { width: 48px; height: 48px; label: "Q"; enabled: root.mnemonic-next-letters[16]; clicked => { root.mnemonic-key(16); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "W"; enabled: root.mnemonic-next-letters[22]; clicked => { root.mnemonic-key(22); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "E"; enabled: root.mnemonic-next-letters[4]; clicked => { root.mnemonic-key(4); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "R"; enabled: root.mnemonic-next-letters[17]; clicked => { root.mnemonic-key(17); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "T"; enabled: root.mnemonic-next-letters[19]; clicked => { root.mnemonic-key(19); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "Y"; enabled: root.mnemonic-next-letters[24]; clicked => { root.mnemonic-key(24); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "U"; enabled: root.mnemonic-next-letters[20]; clicked => { root.mnemonic-key(20); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "I"; enabled: root.mnemonic-next-letters[8]; clicked => { root.mnemonic-key(8); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "O"; enabled: root.mnemonic-next-letters[14]; clicked => { root.mnemonic-key(14); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "P"; enabled: root.mnemonic-next-letters[15]; clicked => { root.mnemonic-key(15); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "Q"; enabled: root.mnemonic-next-letters[16]; clicked => { root.mnemonic-key(16); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "W"; enabled: root.mnemonic-next-letters[22]; clicked => { root.mnemonic-key(22); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "E"; enabled: root.mnemonic-next-letters[4]; clicked => { root.mnemonic-key(4); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "R"; enabled: root.mnemonic-next-letters[17]; clicked => { root.mnemonic-key(17); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "T"; enabled: root.mnemonic-next-letters[19]; clicked => { root.mnemonic-key(19); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "Y"; enabled: root.mnemonic-next-letters[24]; clicked => { root.mnemonic-key(24); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "U"; enabled: root.mnemonic-next-letters[20]; clicked => { root.mnemonic-key(20); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "I"; enabled: root.mnemonic-next-letters[8]; clicked => { root.mnemonic-key(8); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "O"; enabled: root.mnemonic-next-letters[14]; clicked => { root.mnemonic-key(14); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "P"; enabled: root.mnemonic-next-letters[15]; clicked => { root.mnemonic-key(15); } }
             }
 
             HorizontalLayout {
-                height: 48px;
+                height: 46px;
                 padding-left: 24px;
                 padding-right: 24px;
                 spacing: 0px;
 
-                Bip39LetterKey { width: 48px; height: 48px; label: "A"; enabled: root.mnemonic-next-letters[0]; clicked => { root.mnemonic-key(0); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "S"; enabled: root.mnemonic-next-letters[18]; clicked => { root.mnemonic-key(18); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "D"; enabled: root.mnemonic-next-letters[3]; clicked => { root.mnemonic-key(3); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "F"; enabled: root.mnemonic-next-letters[5]; clicked => { root.mnemonic-key(5); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "G"; enabled: root.mnemonic-next-letters[6]; clicked => { root.mnemonic-key(6); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "H"; enabled: root.mnemonic-next-letters[7]; clicked => { root.mnemonic-key(7); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "J"; enabled: root.mnemonic-next-letters[9]; clicked => { root.mnemonic-key(9); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "K"; enabled: root.mnemonic-next-letters[10]; clicked => { root.mnemonic-key(10); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "L"; enabled: root.mnemonic-next-letters[11]; clicked => { root.mnemonic-key(11); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "A"; enabled: root.mnemonic-next-letters[0]; clicked => { root.mnemonic-key(0); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "S"; enabled: root.mnemonic-next-letters[18]; clicked => { root.mnemonic-key(18); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "D"; enabled: root.mnemonic-next-letters[3]; clicked => { root.mnemonic-key(3); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "F"; enabled: root.mnemonic-next-letters[5]; clicked => { root.mnemonic-key(5); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "G"; enabled: root.mnemonic-next-letters[6]; clicked => { root.mnemonic-key(6); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "H"; enabled: root.mnemonic-next-letters[7]; clicked => { root.mnemonic-key(7); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "J"; enabled: root.mnemonic-next-letters[9]; clicked => { root.mnemonic-key(9); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "K"; enabled: root.mnemonic-next-letters[10]; clicked => { root.mnemonic-key(10); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "L"; enabled: root.mnemonic-next-letters[11]; clicked => { root.mnemonic-key(11); } }
             }
 
             HorizontalLayout {
-                height: 48px;
+                height: 46px;
                 // Center the seven-letter bottom QWERTY cluster. The two
                 // equally sized actions act like keyboard modifiers.
                 padding-left: 0px;
@@ -374,20 +413,20 @@ export component AppWindow inherits Window {
 
                 KeyButton {
                     width: 72px;
-                    height: 48px;
+                    height: 46px;
                     label: "Random 11";
                     clicked => { root.request-random-words(); }
                 }
-                Bip39LetterKey { width: 48px; height: 48px; label: "Z"; enabled: root.mnemonic-next-letters[25]; clicked => { root.mnemonic-key(25); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "X"; enabled: root.mnemonic-next-letters[23]; clicked => { root.mnemonic-key(23); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "C"; enabled: root.mnemonic-next-letters[2]; clicked => { root.mnemonic-key(2); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "V"; enabled: root.mnemonic-next-letters[21]; clicked => { root.mnemonic-key(21); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "B"; enabled: root.mnemonic-next-letters[1]; clicked => { root.mnemonic-key(1); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "N"; enabled: root.mnemonic-next-letters[13]; clicked => { root.mnemonic-key(13); } }
-                Bip39LetterKey { width: 48px; height: 48px; label: "M"; enabled: root.mnemonic-next-letters[12]; clicked => { root.mnemonic-key(12); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "Z"; enabled: root.mnemonic-next-letters[25]; clicked => { root.mnemonic-key(25); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "X"; enabled: root.mnemonic-next-letters[23]; clicked => { root.mnemonic-key(23); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "C"; enabled: root.mnemonic-next-letters[2]; clicked => { root.mnemonic-key(2); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "V"; enabled: root.mnemonic-next-letters[21]; clicked => { root.mnemonic-key(21); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "B"; enabled: root.mnemonic-next-letters[1]; clicked => { root.mnemonic-key(1); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "N"; enabled: root.mnemonic-next-letters[13]; clicked => { root.mnemonic-key(13); } }
+                Bip39LetterKey { width: 48px; height: 46px; label: "M"; enabled: root.mnemonic-next-letters[12]; clicked => { root.mnemonic-key(12); } }
                 KeyButton {
                     width: 72px;
-                    height: 48px;
+                    height: 46px;
                     label: "Back";
                     clicked => { root.mnemonic-backspace(); }
                 }
@@ -432,7 +471,8 @@ export component AppWindow inherits Window {
                 color: BitcoinPalette.text;
                 height: 20px;
                 font-size: root.mnemonic-confirmed-words-font-size-hundredths * 0.01px;
-                font-weight: 800;
+                font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : "";
+                font-weight: root.mnemonic-language == 1 ? 400 : 800;
                 horizontal-alignment: center;
                 vertical-alignment: center;
                 overflow: clip;
@@ -453,7 +493,8 @@ export component AppWindow inherits Window {
                         text: root.candidate-word == "" ? "Final word is not revealed." : "Final word: " + root.candidate-word;
                         color: BitcoinPalette.text;
                         font-size: 12px;
-                        font-weight: 800;
+                        font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : "";
+                        font-weight: root.mnemonic-language == 1 ? 400 : 800;
                         horizontal-alignment: center;
                         vertical-alignment: center;
                         overflow: elide;
@@ -523,6 +564,104 @@ export component AppWindow inherits Window {
                     height: 42px;
                     label: "Start over";
                     clicked => { root.mnemonic-reset(); root.current-screen = 0; }
+                }
+            }
+        }
+
+        if root.mnemonic-pinyin-picker-open: Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: parent.height;
+            background: BitcoinPalette.page;
+
+            VerticalLayout {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: parent.height;
+                padding: 4px;
+                spacing: 4px;
+
+                HorizontalLayout {
+                    height: 28px;
+                    spacing: 4px;
+
+                    Text {
+                        width: 300px;
+                        text: "Choose Chinese BIP39 word";
+                        color: BitcoinPalette.text;
+                        font-size: 14px;
+                        font-weight: 800;
+                        vertical-alignment: center;
+                    }
+                    KeyButton {
+                        width: 168px;
+                        height: 28px;
+                        label: "Cancel";
+                        clicked => { root.mnemonic-dismiss-pinyin-picker(); }
+                    }
+                }
+
+                Text {
+                    height: 18px;
+                    text: "Pinyin: " + root.mnemonic-prefix;
+                    color: BitcoinPalette.muted;
+                    font-size: 11px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                VerticalLayout {
+                    height: 112px;
+                    spacing: 4px;
+
+                    HorizontalLayout {
+                        height: 54px;
+                        spacing: 4px;
+
+                        KeyButton { width: 154px; height: 54px; label: root.mnemonic-pinyin-candidates[0]; label-font-family: "Noto Sans CJK SC"; label-font-size: 28px; enabled: root.mnemonic-pinyin-candidates[0] != ""; clicked => { root.mnemonic-select-pinyin-candidate(0); } }
+                        KeyButton { width: 154px; height: 54px; label: root.mnemonic-pinyin-candidates[1]; label-font-family: "Noto Sans CJK SC"; label-font-size: 28px; enabled: root.mnemonic-pinyin-candidates[1] != ""; clicked => { root.mnemonic-select-pinyin-candidate(1); } }
+                        KeyButton { width: 154px; height: 54px; label: root.mnemonic-pinyin-candidates[2]; label-font-family: "Noto Sans CJK SC"; label-font-size: 28px; enabled: root.mnemonic-pinyin-candidates[2] != ""; clicked => { root.mnemonic-select-pinyin-candidate(2); } }
+                    }
+                    HorizontalLayout {
+                        height: 54px;
+                        spacing: 4px;
+
+                        KeyButton { width: 154px; height: 54px; label: root.mnemonic-pinyin-candidates[3]; label-font-family: "Noto Sans CJK SC"; label-font-size: 28px; enabled: root.mnemonic-pinyin-candidates[3] != ""; clicked => { root.mnemonic-select-pinyin-candidate(3); } }
+                        KeyButton { width: 154px; height: 54px; label: root.mnemonic-pinyin-candidates[4]; label-font-family: "Noto Sans CJK SC"; label-font-size: 28px; enabled: root.mnemonic-pinyin-candidates[4] != ""; clicked => { root.mnemonic-select-pinyin-candidate(4); } }
+                        KeyButton { width: 154px; height: 54px; label: root.mnemonic-pinyin-candidates[5]; label-font-family: "Noto Sans CJK SC"; label-font-size: 28px; enabled: root.mnemonic-pinyin-candidates[5] != ""; clicked => { root.mnemonic-select-pinyin-candidate(5); } }
+                    }
+                }
+
+                HorizontalLayout {
+                    height: 44px;
+                    spacing: 4px;
+
+                    KeyButton {
+                        width: 176px;
+                        height: 44px;
+                        label: "<";
+                        label-font-size: 18px;
+                        enabled: root.mnemonic-pinyin-has-previous-page;
+                        clicked => { root.mnemonic-change-pinyin-page(-1); }
+                    }
+                    Text {
+                        width: 112px;
+                        text: root.mnemonic-pinyin-page-label;
+                        color: BitcoinPalette.muted;
+                        font-size: 11px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    KeyButton {
+                        width: 176px;
+                        height: 44px;
+                        label: ">";
+                        label-font-size: 18px;
+                        enabled: root.mnemonic-pinyin-has-next-page;
+                        clicked => { root.mnemonic-change-pinyin-page(1); }
+                    }
                 }
             }
         }

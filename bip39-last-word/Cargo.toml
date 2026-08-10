@@ -4,5 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bip39 = { version = "2.2.2", default-features = false }
+bip39 = { version = "2.2.2", default-features = false, features = ["chinese-simplified"] }
 bitcoin_hashes = { version = "0.14.101", default-features = false }
+
+[build-dependencies]
+bip39 = { version = "2.2.2", default-features = false, features = ["chinese-simplified"] }
+pinyin = { version = "0.11.0", default-features = false, features = ["heteronym", "plain"] }

@@ -1,5 +1,5 @@
 use alloc::string::String;
-use bip39_last_word::{word_for_index, word_index, words_by_prefix};
+use bip39_last_word::{MnemonicLanguage, word_for_index_in, word_index, words_by_prefix};
 
 use super::{CommitFeedback, LastWordFlow};
 
@@ -14,38 +14,78 @@ impl LastWordFlow {
     pub(crate) fn entry_text(&self) -> String {
         let prefix = self.prefix_text();
         if prefix.is_empty() {
-            return String::from("Tap letters to filter the English word list.");
+            return match self.language {
+                MnemonicLanguage::English => {
+                    String::from("Tap letters to filter the English word list.")
+                }
+                MnemonicLanguage::SimplifiedChinese => {
+                    String::from("Type pinyin to find a Simplified Chinese BIP39 word.")
+                }
+            };
         }
 
-        let matches = words_by_prefix(prefix);
-        if let Some(index) = word_index(prefix) {
-            return word_for_index(index)
-                .map(|word| alloc::format!("Use exact: {word}"))
-                .unwrap_or_default();
-        }
-        if matches.len() == 1 {
-            return alloc::format!("Only match: {}", matches[0]);
-        }
+        match self.language {
+            MnemonicLanguage::English => {
+                let matches = words_by_prefix(prefix);
+                if let Some(index) = word_index(prefix) {
+                    return word_for_index_in(self.language, index)
+                        .map(|word| alloc::format!("Use exact: {word}"))
+                        .unwrap_or_default();
+                }
+                if matches.len() == 1 {
+                    return alloc::format!("Only match: {}", matches[0]);
+                }
 
-        alloc::format!("{} matches — add a letter.", matches.len())
+                alloc::format!("{} matches - add a letter.", matches.len())
+            }
+            MnemonicLanguage::SimplifiedChinese => {
+                if let Some(index) = self.selected_word_index() {
+                    return word_for_index_in(self.language, index)
+                        .map(|word| alloc::format!("Only match: {word}"))
+                        .unwrap_or_default();
+                }
+
+                alloc::format!(
+                    "{} Chinese matches - tap Use word to choose.",
+                    self.prefix_match_count()
+                )
+            }
+        }
     }
 
     pub(crate) fn message(&self) -> String {
         if self.last_letter_was_rejected {
-            return String::from(
-                "No BIP39 word can continue with that letter. Try another letter.",
-            );
+            return match self.language {
+                MnemonicLanguage::English => {
+                    String::from("No BIP39 word can continue with that letter. Try another letter.")
+                }
+                MnemonicLanguage::SimplifiedChinese => {
+                    String::from("No BIP39 word matches that pinyin. Try another letter.")
+                }
+            };
         }
 
         match self.commit_feedback {
             CommitFeedback::None => {}
             CommitFeedback::EnterLetters => {
-                return String::from("Enter a BIP39 word before tapping Use word.");
+                return match self.language {
+                    MnemonicLanguage::English => {
+                        String::from("Enter a BIP39 word before tapping Use word.")
+                    }
+                    MnemonicLanguage::SimplifiedChinese => {
+                        String::from("Enter pinyin before tapping Use word.")
+                    }
+                };
             }
             CommitFeedback::MoreMatches { count } => {
-                return alloc::format!(
-                    "Use word needs one BIP39 word — {count} matching words remain."
-                );
+                return match self.language {
+                    MnemonicLanguage::English => alloc::format!(
+                        "Use word needs one BIP39 word - {count} matching words remain."
+                    ),
+                    MnemonicLanguage::SimplifiedChinese => {
+                        alloc::format!("Choose one of {count} Chinese BIP39 words.")
+                    }
+                };
             }
         }
 
@@ -66,7 +106,7 @@ impl LastWordFlow {
             if !text.is_empty() {
                 text.push(' ');
             }
-            text.push_str(word_for_index(self.word_indices[i]).unwrap_or("?"));
+            text.push_str(word_for_index_in(self.language, self.word_indices[i]).unwrap_or("?"));
         }
         text
     }
@@ -74,7 +114,7 @@ impl LastWordFlow {
     pub(crate) fn confirmed_words_font_size_hundredths(&self) -> i32 {
         let width_units = self
             .confirmed_words_text()
-            .bytes()
+            .chars()
             .map(word_list_glyph_advance_units)
             .sum::<usize>();
         if width_units == 0 {
@@ -95,15 +135,16 @@ impl LastWordFlow {
     }
 }
 
-fn word_list_glyph_advance_units(character: u8) -> usize {
+fn word_list_glyph_advance_units(character: char) -> usize {
     match character {
-        b' ' | b'f' | b't' => 160,
-        b'i' | b'j' | b'l' => 127,
-        b'm' => 479,
-        b'w' => 415,
-        b'k' | b's' | b'v' | b'x' | b'y' | b'z' => 288,
-        b'r' => 191,
-        _ => 320,
+        ' ' | 'f' | 't' => 160,
+        'i' | 'j' | 'l' => 127,
+        'm' => 479,
+        'w' => 415,
+        'k' | 's' | 'v' | 'x' | 'y' | 'z' => 288,
+        'r' => 191,
+        _ if character.is_ascii() => 320,
+        _ => 640,
     }
 }
 
@@ -147,5 +188,15 @@ mod tests {
 
         assert!(!flow.commit_word());
         assert_eq!(flow.confirmed_words_text(), "act");
+    }
+
+    #[test]
+    fn renders_confirmed_words_in_the_selected_language() {
+        let mut flow = LastWordFlow::default();
+        flow.select_language(1);
+        flow.word_indices[0] = 0;
+        flow.word_count = 1;
+
+        assert_eq!(flow.confirmed_words_text(), "\u{7684}");
     }
 }

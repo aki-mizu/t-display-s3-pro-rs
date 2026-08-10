@@ -1,4 +1,4 @@
-use bip39_last_word::word_for_entropy_bits;
+use bip39_last_word::word_for_entropy_bits_in;
 
 use super::LastWordFlow;
 
@@ -78,7 +78,9 @@ impl LastWordFlow {
 
     pub(crate) fn candidate_word(&self) -> Option<&'static str> {
         self.entropy_confirmed
-            .then(|| word_for_entropy_bits(&self.word_indices, self.entropy_bits).ok())
+            .then(|| {
+                word_for_entropy_bits_in(self.language, &self.word_indices, self.entropy_bits).ok()
+            })
             .flatten()
     }
 }
