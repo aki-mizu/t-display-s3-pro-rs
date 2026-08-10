@@ -204,6 +204,11 @@ export component AppWindow inherits Window {
     in-out property <string> mnemonic-pinyin-page-label: "";
     in-out property <bool> mnemonic-pinyin-has-previous-page: false;
     in-out property <bool> mnemonic-pinyin-has-next-page: false;
+    in-out property <bool> final-word-picker-open: false;
+    in-out property <[string]> final-word-candidates: [];
+    in-out property <string> final-word-page-label: "";
+    in-out property <bool> final-word-has-previous-page: false;
+    in-out property <bool> final-word-has-next-page: false;
     in-out property <string> candidate-word: "";
     in-out property <bool> entropy-confirmed: false;
         in-out property <int> entropy-entry-mode: 0;
@@ -228,6 +233,10 @@ export component AppWindow inherits Window {
     callback mnemonic-select-pinyin-candidate(int);
     callback mnemonic-change-pinyin-page(int);
     callback mnemonic-dismiss-pinyin-picker();
+    callback open-final-word-picker();
+    callback select-final-word-candidate(int);
+    callback final-word-change-page(int);
+    callback dismiss-final-word-picker();
     callback request-random-words();
     callback entropy-toggle(int);
         callback entropy-select-die(int, int);
@@ -433,7 +442,7 @@ export component AppWindow inherits Window {
             }
         }
 
-        if root.current-screen == 1: VerticalLayout {
+        if root.current-screen == 1 && !root.final-word-picker-open: VerticalLayout {
             padding: 3px;
             spacing: 2px;
 
@@ -546,13 +555,19 @@ export component AppWindow inherits Window {
                 spacing: 2px;
 
                 KeyButton {
-                    width: 156px;
+                    width: 118px;
                     height: 42px;
                     label: "Edit words";
                     clicked => { root.current-screen = 0; }
                 }
                 KeyButton {
-                    width: 156px;
+                    width: 118px;
+                    height: 42px;
+                    label: "Pick word";
+                    clicked => { root.open-final-word-picker(); }
+                }
+                KeyButton {
+                    width: 118px;
                     height: 42px;
                     label: "Confirm entropy";
                     active: !root.entropy-confirmed;
@@ -560,10 +575,110 @@ export component AppWindow inherits Window {
                     clicked => { root.entropy-confirm(); }
                 }
                 KeyButton {
-                    width: 156px;
+                    width: 118px;
                     height: 42px;
                     label: "Start over";
                     clicked => { root.mnemonic-reset(); root.current-screen = 0; }
+                }
+            }
+        }
+
+        if root.final-word-picker-open: Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: parent.height;
+            background: BitcoinPalette.page;
+
+            VerticalLayout {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: parent.height;
+                padding: 4px;
+                spacing: 4px;
+
+                HorizontalLayout {
+                    height: 26px;
+                    spacing: 4px;
+
+                    Text {
+                        width: 302px;
+                        text: "Choose final word";
+                        color: BitcoinPalette.text;
+                        font-size: 14px;
+                        font-weight: 800;
+                        vertical-alignment: center;
+                    }
+                    KeyButton {
+                        width: 166px;
+                        height: 26px;
+                        label: "Cancel";
+                        clicked => { root.dismiss-final-word-picker(); }
+                    }
+                }
+
+                VerticalLayout {
+                    height: 134px;
+                    spacing: 4px;
+
+                    HorizontalLayout {
+                        height: 42px;
+                        spacing: 4px;
+
+                        KeyButton { width: 115px; height: 42px; label: root.final-word-candidates[0]; label-font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : ""; label-font-size: root.mnemonic-language == 1 ? 20px : 12px; enabled: root.final-word-candidates[0] != ""; clicked => { root.select-final-word-candidate(0); } }
+                        KeyButton { width: 115px; height: 42px; label: root.final-word-candidates[1]; label-font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : ""; label-font-size: root.mnemonic-language == 1 ? 20px : 12px; enabled: root.final-word-candidates[1] != ""; clicked => { root.select-final-word-candidate(1); } }
+                        KeyButton { width: 115px; height: 42px; label: root.final-word-candidates[2]; label-font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : ""; label-font-size: root.mnemonic-language == 1 ? 20px : 12px; enabled: root.final-word-candidates[2] != ""; clicked => { root.select-final-word-candidate(2); } }
+                        KeyButton { width: 115px; height: 42px; label: root.final-word-candidates[3]; label-font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : ""; label-font-size: root.mnemonic-language == 1 ? 20px : 12px; enabled: root.final-word-candidates[3] != ""; clicked => { root.select-final-word-candidate(3); } }
+                    }
+                    HorizontalLayout {
+                        height: 42px;
+                        spacing: 4px;
+
+                        KeyButton { width: 115px; height: 42px; label: root.final-word-candidates[4]; label-font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : ""; label-font-size: root.mnemonic-language == 1 ? 20px : 12px; enabled: root.final-word-candidates[4] != ""; clicked => { root.select-final-word-candidate(4); } }
+                        KeyButton { width: 115px; height: 42px; label: root.final-word-candidates[5]; label-font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : ""; label-font-size: root.mnemonic-language == 1 ? 20px : 12px; enabled: root.final-word-candidates[5] != ""; clicked => { root.select-final-word-candidate(5); } }
+                        KeyButton { width: 115px; height: 42px; label: root.final-word-candidates[6]; label-font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : ""; label-font-size: root.mnemonic-language == 1 ? 20px : 12px; enabled: root.final-word-candidates[6] != ""; clicked => { root.select-final-word-candidate(6); } }
+                        KeyButton { width: 115px; height: 42px; label: root.final-word-candidates[7]; label-font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : ""; label-font-size: root.mnemonic-language == 1 ? 20px : 12px; enabled: root.final-word-candidates[7] != ""; clicked => { root.select-final-word-candidate(7); } }
+                    }
+                    HorizontalLayout {
+                        height: 42px;
+                        spacing: 4px;
+
+                        KeyButton { width: 115px; height: 42px; label: root.final-word-candidates[8]; label-font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : ""; label-font-size: root.mnemonic-language == 1 ? 20px : 12px; enabled: root.final-word-candidates[8] != ""; clicked => { root.select-final-word-candidate(8); } }
+                        KeyButton { width: 115px; height: 42px; label: root.final-word-candidates[9]; label-font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : ""; label-font-size: root.mnemonic-language == 1 ? 20px : 12px; enabled: root.final-word-candidates[9] != ""; clicked => { root.select-final-word-candidate(9); } }
+                        KeyButton { width: 115px; height: 42px; label: root.final-word-candidates[10]; label-font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : ""; label-font-size: root.mnemonic-language == 1 ? 20px : 12px; enabled: root.final-word-candidates[10] != ""; clicked => { root.select-final-word-candidate(10); } }
+                        KeyButton { width: 115px; height: 42px; label: root.final-word-candidates[11]; label-font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : ""; label-font-size: root.mnemonic-language == 1 ? 20px : 12px; enabled: root.final-word-candidates[11] != ""; clicked => { root.select-final-word-candidate(11); } }
+                    }
+                }
+
+                HorizontalLayout {
+                    height: 40px;
+                    spacing: 4px;
+
+                    KeyButton {
+                        width: 156px;
+                        height: 40px;
+                        label: "<";
+                        label-font-size: 18px;
+                        enabled: root.final-word-has-previous-page;
+                        clicked => { root.final-word-change-page(-1); }
+                    }
+                    Text {
+                        width: 152px;
+                        text: root.final-word-page-label;
+                        color: BitcoinPalette.muted;
+                        font-size: 11px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    KeyButton {
+                        width: 156px;
+                        height: 40px;
+                        label: ">";
+                        label-font-size: 18px;
+                        enabled: root.final-word-has-next-page;
+                        clicked => { root.final-word-change-page(1); }
+                    }
                 }
             }
         }

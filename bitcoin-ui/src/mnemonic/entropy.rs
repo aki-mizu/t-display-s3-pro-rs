@@ -1,6 +1,9 @@
-use bip39_last_word::word_for_entropy_bits_in;
+use alloc::{string::String, vec::Vec};
+use bip39_last_word::{CANDIDATE_COUNT, word_for_entropy_bits_in};
 
 use super::LastWordFlow;
+
+const FINAL_WORD_CANDIDATES_PER_PAGE: usize = 12;
 
 impl LastWordFlow {
     pub(crate) fn toggle_entropy_bit(&mut self, bit: i32) {
@@ -44,6 +47,103 @@ impl LastWordFlow {
         }
     }
 
+    pub(crate) fn open_final_word_picker(&mut self) -> bool {
+        if !self.is_complete() {
+            return false;
+        }
+
+        self.final_word_candidate_page =
+            usize::from(self.entropy_bits) / FINAL_WORD_CANDIDATES_PER_PAGE;
+        self.final_word_picker_open = true;
+        true
+    }
+
+    pub(crate) fn close_final_word_picker(&mut self) {
+        self.final_word_picker_open = false;
+    }
+
+    pub(crate) fn is_final_word_picker_open(&self) -> bool {
+        self.final_word_picker_open
+    }
+
+    pub(crate) fn final_word_candidate_labels(&self) -> Vec<String> {
+        let mut labels = Vec::with_capacity(FINAL_WORD_CANDIDATES_PER_PAGE);
+        if !self.final_word_picker_open || !self.is_complete() {
+            labels.resize(FINAL_WORD_CANDIDATES_PER_PAGE, String::new());
+            return labels;
+        }
+
+        let first_candidate = self.final_word_candidate_page * FINAL_WORD_CANDIDATES_PER_PAGE;
+        for candidate_offset in 0..FINAL_WORD_CANDIDATES_PER_PAGE {
+            let candidate_position = first_candidate + candidate_offset;
+            let label = (candidate_position < CANDIDATE_COUNT)
+                .then(|| u8::try_from(candidate_position).ok())
+                .flatten()
+                .and_then(|entropy_bits| {
+                    word_for_entropy_bits_in(self.language, &self.word_indices, entropy_bits).ok()
+                })
+                .map(String::from)
+                .unwrap_or_default();
+            labels.push(label);
+        }
+
+        labels
+    }
+
+    pub(crate) fn final_word_candidate_page_label(&self) -> String {
+        alloc::format!(
+            "{} / {}",
+            self.final_word_candidate_page + 1,
+            self.final_word_candidate_page_count()
+        )
+    }
+
+    pub(crate) fn has_previous_final_word_candidate_page(&self) -> bool {
+        self.final_word_candidate_page > 0
+    }
+
+    pub(crate) fn has_next_final_word_candidate_page(&self) -> bool {
+        self.final_word_candidate_page + 1 < self.final_word_candidate_page_count()
+    }
+
+    pub(crate) fn change_final_word_candidate_page(&mut self, direction: i32) {
+        if !self.final_word_picker_open {
+            return;
+        }
+
+        if direction < 0 {
+            self.final_word_candidate_page = self.final_word_candidate_page.saturating_sub(1);
+        } else if direction > 0 {
+            self.final_word_candidate_page = (self.final_word_candidate_page + 1)
+                .min(self.final_word_candidate_page_count() - 1);
+        }
+    }
+
+    pub(crate) fn select_final_word_candidate(&mut self, candidate_offset: i32) -> bool {
+        if !self.final_word_picker_open {
+            return false;
+        }
+
+        let Ok(candidate_offset) = usize::try_from(candidate_offset) else {
+            return false;
+        };
+        if candidate_offset >= FINAL_WORD_CANDIDATES_PER_PAGE {
+            return false;
+        }
+
+        let candidate_position =
+            self.final_word_candidate_page * FINAL_WORD_CANDIDATES_PER_PAGE + candidate_offset;
+        if candidate_position >= CANDIDATE_COUNT {
+            return false;
+        }
+
+        self.entropy_bits =
+            u8::try_from(candidate_position).expect("candidate position fits in u8");
+        self.entropy_confirmed = true;
+        self.final_word_picker_open = false;
+        true
+    }
+
     pub(crate) fn is_entropy_confirmed(&self) -> bool {
         self.entropy_confirmed
     }
@@ -82,6 +182,10 @@ impl LastWordFlow {
                 word_for_entropy_bits_in(self.language, &self.word_indices, self.entropy_bits).ok()
             })
             .flatten()
+    }
+
+    fn final_word_candidate_page_count(&self) -> usize {
+        CANDIDATE_COUNT.div_ceil(FINAL_WORD_CANDIDATES_PER_PAGE)
     }
 }
 
@@ -166,5 +270,29 @@ mod tests {
 
         flow.confirm_entropy();
         assert_eq!(flow.candidate_word(), Some("yellow"));
+    }
+
+    #[test]
+    fn selecting_a_final_word_candidate_confirms_its_entropy_bits() {
+        let mut flow = LastWordFlow::default();
+        for _ in 0..PREFIX_WORD_COUNT {
+            super::super::enter_word(&mut flow, "abandon");
+        }
+
+        assert!(flow.open_final_word_picker());
+        assert_eq!(flow.final_word_candidate_page_label(), "1 / 11");
+        assert_eq!(flow.final_word_candidate_labels()[0], "about");
+
+        flow.change_final_word_candidate_page(1);
+        assert_eq!(flow.final_word_candidate_page_label(), "2 / 11");
+        assert!(flow.select_final_word_candidate(0));
+
+        assert_eq!(flow.entropy_bits, 12);
+        assert!(flow.is_entropy_confirmed());
+        assert!(!flow.is_final_word_picker_open());
+        assert_eq!(
+            flow.candidate_word(),
+            word_for_entropy_bits_in(flow.language, &flow.word_indices, 12).ok()
+        );
     }
 }

@@ -115,6 +115,52 @@ pub(crate) fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWord
         }
     });
 
+    window.on_open_final_word_picker({
+        let flow = Rc::clone(&flow);
+        let weak_window = weak_window.clone();
+        move || {
+            flow.borrow_mut().open_final_word_picker();
+            if let Some(window) = weak_window.upgrade() {
+                sync_mnemonic_view(&window, &flow.borrow());
+            }
+        }
+    });
+
+    window.on_final_word_change_page({
+        let flow = Rc::clone(&flow);
+        let weak_window = weak_window.clone();
+        move |direction| {
+            flow.borrow_mut()
+                .change_final_word_candidate_page(direction);
+            if let Some(window) = weak_window.upgrade() {
+                sync_mnemonic_view(&window, &flow.borrow());
+            }
+        }
+    });
+
+    window.on_select_final_word_candidate({
+        let flow = Rc::clone(&flow);
+        let weak_window = weak_window.clone();
+        move |candidate_offset| {
+            flow.borrow_mut()
+                .select_final_word_candidate(candidate_offset);
+            if let Some(window) = weak_window.upgrade() {
+                sync_mnemonic_view(&window, &flow.borrow());
+            }
+        }
+    });
+
+    window.on_dismiss_final_word_picker({
+        let flow = Rc::clone(&flow);
+        let weak_window = weak_window.clone();
+        move || {
+            flow.borrow_mut().close_final_word_picker();
+            if let Some(window) = weak_window.upgrade() {
+                sync_mnemonic_view(&window, &flow.borrow());
+            }
+        }
+    });
+
     window.on_entropy_toggle({
         let flow = Rc::clone(&flow);
         let weak_window = weak_window.clone();
@@ -157,6 +203,11 @@ pub(crate) fn sync_mnemonic_view(window: &AppWindow, flow: &LastWordFlow) {
         .into_iter()
         .map(SharedString::from)
         .collect();
+    let final_word_candidates: Vec<SharedString> = flow
+        .final_word_candidate_labels()
+        .into_iter()
+        .map(SharedString::from)
+        .collect();
     window.set_mnemonic_language(flow.language_index());
     window.set_mnemonic_language_selection_visible(flow.is_language_selection_visible());
     window.set_mnemonic_prefix(flow.prefix_text().into());
@@ -173,6 +224,11 @@ pub(crate) fn sync_mnemonic_view(window: &AppWindow, flow: &LastWordFlow) {
     window.set_mnemonic_pinyin_page_label(flow.pinyin_candidate_page_label().into());
     window.set_mnemonic_pinyin_has_previous_page(flow.has_previous_pinyin_candidate_page());
     window.set_mnemonic_pinyin_has_next_page(flow.has_next_pinyin_candidate_page());
+    window.set_final_word_picker_open(flow.is_final_word_picker_open());
+    window.set_final_word_candidates(VecModel::from_slice(&final_word_candidates));
+    window.set_final_word_page_label(flow.final_word_candidate_page_label().into());
+    window.set_final_word_has_previous_page(flow.has_previous_final_word_candidate_page());
+    window.set_final_word_has_next_page(flow.has_next_final_word_candidate_page());
     window.set_entropy_octal_face(i32::from(flow.entropy_octal_face()));
     window.set_entropy_hex_face(i32::from(flow.entropy_hex_face()));
     window.set_entropy_octal_bits(flow.entropy_octal_bits().into());
@@ -259,6 +315,22 @@ mod tests {
             .expect("valid test word indices");
         sync_mnemonic_view(&window, &flow.borrow());
         assert!(!window.get_entropy_confirmed());
+
+        window.invoke_open_final_word_picker();
+        assert!(window.get_final_word_picker_open());
+        assert!(
+            window
+                .get_final_word_candidates()
+                .row_data(0)
+                .is_some_and(|candidate| !candidate.is_empty())
+        );
+        let first_final_word_page = window.get_final_word_page_label();
+        window.invoke_final_word_change_page(1);
+        assert_ne!(window.get_final_word_page_label(), first_final_word_page);
+        window.invoke_select_final_word_candidate(0);
+        assert!(!window.get_final_word_picker_open());
+        assert!(window.get_entropy_confirmed());
+        assert!(!window.get_candidate_word().is_empty());
 
         window.invoke_entropy_confirm();
         assert!(window.get_entropy_confirmed());

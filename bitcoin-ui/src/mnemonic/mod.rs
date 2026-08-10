@@ -38,12 +38,16 @@ pub(crate) struct LastWordFlow {
     pinyin_candidate_picker_open: bool,
     entropy_bits: u8,
     entropy_confirmed: bool,
+    final_word_candidate_page: usize,
+    final_word_picker_open: bool,
 }
 
 impl LastWordFlow {
     fn clear_entropy(&mut self) {
         self.entropy_bits = 0;
         self.entropy_confirmed = false;
+        self.final_word_candidate_page = 0;
+        self.final_word_picker_open = false;
     }
 }
 
