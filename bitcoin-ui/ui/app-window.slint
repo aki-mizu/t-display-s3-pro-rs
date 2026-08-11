@@ -224,6 +224,16 @@ export component AppWindow inherits Window {
     in-out property <bool> entropy-bit-4: false;
     in-out property <bool> entropy-bit-2: false;
     in-out property <bool> entropy-bit-1: false;
+    in-out property <int> address-start-index: 0;
+    in-out property <[string]> address-rows: [];
+    in-out property <[string]> address-descriptor-pages: [];
+    in-out property <int> address-descriptor-page: 0;
+    in-out property <int> address-descriptor-page-count: 0;
+    in-out property <int> address-view: 0;
+    in-out property <string> address-page-label: "";
+    in-out property <bool> address-loading: false;
+    in-out property <bool> address-has-previous-page: false;
+    in-out property <bool> address-has-next-page: false;
 
     callback mnemonic-key(int);
     callback mnemonic-select-language(int);
@@ -241,6 +251,9 @@ export component AppWindow inherits Window {
     callback entropy-toggle(int);
         callback entropy-select-die(int, int);
     callback entropy-confirm();
+    callback address-change-page(int);
+    callback address-descriptor-change-page(int);
+    callback address-back();
 
     width: 480px;
     height: 222px;
@@ -579,6 +592,156 @@ export component AppWindow inherits Window {
                     height: 42px;
                     label: "Start over";
                     clicked => { root.mnemonic-reset(); root.current-screen = 0; }
+                }
+            }
+        }
+
+        if root.current-screen == 2: VerticalLayout {
+            padding: 4px;
+            spacing: 4px;
+
+            HorizontalLayout {
+                height: 28px;
+                spacing: 4px;
+
+                KeyButton {
+                    width: 150px;
+                    height: 28px;
+                    label: "Address";
+                    active: root.address-view == 0;
+                    clicked => { root.address-view = 0; }
+                }
+                KeyButton {
+                    width: 150px;
+                    height: 28px;
+                    label: "Descriptor";
+                    active: root.address-view == 1;
+                    enabled: !root.address-loading && root.address-descriptor-page-count > 0;
+                    clicked => { root.address-view = 1; root.address-descriptor-page = 0; }
+                }
+                Text {
+                    width: 164px;
+                    text: root.address-page-label;
+                    color: BitcoinPalette.muted;
+                    font-size: 11px;
+                    horizontal-alignment: right;
+                    vertical-alignment: center;
+                }
+            }
+
+            Text {
+                height: 16px;
+                text: root.address-view == 0 ? "BIP84 external receive" : "Exact descriptor with checksum";
+                color: BitcoinPalette.muted;
+                font-size: 10px;
+                vertical-alignment: center;
+            }
+
+            Rectangle {
+                height: 130px;
+                background: BitcoinPalette.panel;
+                border-color: BitcoinPalette.border;
+                border-width: 1px;
+                border-radius: 4px;
+
+                Text {
+                    x: 10px;
+                    y: 2px;
+                    width: parent.width - 20px;
+                    height: parent.height - 4px;
+                    text: root.address-rows[0];
+                    color: BitcoinPalette.text;
+                    font-size: root.address-loading ? 14px : 32px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    overflow: clip;
+                    visible: root.address-view == 0;
+                }
+
+                Text {
+                    x: 10px;
+                    y: 2px;
+                    width: parent.width - 20px;
+                    height: parent.height - 4px;
+                    text: root.address-descriptor-pages[root.address-descriptor-page];
+                    color: BitcoinPalette.text;
+                    font-size: 32px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    overflow: clip;
+                    visible: root.address-view == 1;
+                }
+            }
+
+            if root.address-view == 0: HorizontalLayout {
+                height: 32px;
+                spacing: 4px;
+
+                KeyButton {
+                    width: 112px;
+                    height: 32px;
+                    label: "Back";
+                    clicked => { root.address-back(); }
+                }
+                KeyButton {
+                    width: 112px;
+                    height: 32px;
+                    label: "<";
+                    label-font-size: 18px;
+                    enabled: !root.address-loading && root.address-has-previous-page;
+                    clicked => { root.address-change-page(-1); }
+                }
+                Text {
+                    width: 124px;
+                    text: root.address-loading ? "Preparing..." : "Index " + root.address-start-index;
+                    color: BitcoinPalette.muted;
+                    font-size: 10px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                KeyButton {
+                    width: 112px;
+                    height: 32px;
+                    label: ">";
+                    label-font-size: 18px;
+                    enabled: !root.address-loading && root.address-has-next-page;
+                    clicked => { root.address-change-page(1); }
+                }
+            }
+
+            if root.address-view == 1: HorizontalLayout {
+                height: 32px;
+                spacing: 4px;
+
+                KeyButton {
+                    width: 112px;
+                    height: 32px;
+                    label: "Back";
+                    clicked => { root.address-back(); }
+                }
+                KeyButton {
+                    width: 112px;
+                    height: 32px;
+                    label: "<";
+                    label-font-size: 18px;
+                    enabled: root.address-descriptor-page > 0;
+                    clicked => { root.address-descriptor-change-page(-1); }
+                }
+                Text {
+                    width: 124px;
+                    text: (root.address-descriptor-page + 1) + " / " + root.address-descriptor-page-count;
+                    color: BitcoinPalette.muted;
+                    font-size: 10px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                KeyButton {
+                    width: 112px;
+                    height: 32px;
+                    label: ">";
+                    label-font-size: 18px;
+                    enabled: root.address-descriptor-page + 1 < root.address-descriptor-page-count;
+                    clicked => { root.address-descriptor-change-page(1); }
                 }
             }
         }

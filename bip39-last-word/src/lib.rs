@@ -290,6 +290,32 @@ pub fn word_for_entropy_bits(
     word_for_entropy_bits_in(MnemonicLanguage::English, indices, entropy_bits)
 }
 
+/// Reconstructs the 128 bits of entropy represented by an eleven-word prefix
+/// and its selected seven remaining entropy bits.
+pub fn entropy_from_indices(
+    indices: &[u16; PREFIX_WORD_COUNT],
+    entropy_bits: u8,
+) -> Result<[u8; 16], Error> {
+    let prefix = entropy_prefix(indices)?;
+    validate_entropy_bits(entropy_bits)?;
+
+    Ok(((prefix << UNKNOWN_ENTROPY_BITS) | u128::from(entropy_bits)).to_be_bytes())
+}
+
+/// Converts 128 bits of entropy into a BIP39 seed using the selected word list
+/// and an empty passphrase.
+///
+/// The fixed-size entropy input is always valid for a 12-word mnemonic.
+pub fn seed_from_entropy_with_empty_passphrase(
+    language: MnemonicLanguage,
+    entropy: &[u8; 16],
+) -> [u8; 64] {
+    let mnemonic = bip39::Mnemonic::from_entropy_in(language.bip39_language(), entropy)
+        .expect("128-bit entropy is valid for a 12-word BIP39 mnemonic");
+
+    mnemonic.to_seed_normalized("")
+}
+
 fn entropy_prefix(indices: &[u16; PREFIX_WORD_COUNT]) -> Result<u128, Error> {
     let mut prefix = 0_u128;
 
@@ -335,6 +361,23 @@ mod tests {
         let indices = indices_from_words(&ABANDON).expect("known BIP39 words");
 
         assert_eq!(word_for_entropy_bits(&indices, 0), Ok("about"));
+        assert_eq!(entropy_from_indices(&indices, 0), Ok([0; 16]));
+    }
+
+    #[test]
+    fn derives_the_official_empty_passphrase_seed() {
+        let seed = seed_from_entropy_with_empty_passphrase(MnemonicLanguage::English, &[0; 16]);
+
+        assert_eq!(
+            seed,
+            [
+                0x5e, 0xb0, 0x0b, 0xbd, 0xdc, 0xf0, 0x69, 0x08, 0x48, 0x89, 0xa8, 0xab, 0x91, 0x55,
+                0x56, 0x81, 0x65, 0xf5, 0xc4, 0x53, 0xcc, 0xb8, 0x5e, 0x70, 0x81, 0x1a, 0xae, 0xd6,
+                0xf6, 0xda, 0x5f, 0xc1, 0x9a, 0x5a, 0xc4, 0x0b, 0x38, 0x9c, 0xd3, 0x70, 0xd0, 0x86,
+                0x20, 0x6d, 0xec, 0x8a, 0xa6, 0xc4, 0x3d, 0xae, 0xa6, 0x69, 0x0f, 0x20, 0xad, 0x3d,
+                0x13, 0xd8, 0x55, 0x0c, 0x2a, 0xca, 0x0a, 0x41, 0xf2,
+            ]
+        );
     }
 
     #[test]

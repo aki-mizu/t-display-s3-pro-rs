@@ -1,13 +1,14 @@
 #![no_std]
 
-//! Board-independent touchscreen presentation layer for the BIP39 final-word helper.
+//! Board-independent touchscreen presentation and address-derivation layer.
 //!
-//! This crate owns the generated Slint window and its local-only word-entry
-//! flow. It deliberately has no ESP32, PMU, key, seed-derivation, signing, or
-//! networking dependencies.
+//! This crate owns the generated Slint window, local-only word-entry flow, and
+//! BIP84 receive-address presentation. It deliberately has no ESP32, PMU,
+//! persistence, signing, or networking dependencies.
 
 extern crate alloc;
 
+mod address_list;
 mod generated;
 mod mnemonic;
 mod mnemonic_view;

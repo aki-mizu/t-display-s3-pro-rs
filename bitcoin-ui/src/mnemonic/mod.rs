@@ -49,6 +49,18 @@ impl LastWordFlow {
         self.final_word_candidate_page = 0;
         self.final_word_picker_open = false;
     }
+
+    pub(crate) fn finalized_entropy(&self) -> Option<[u8; 16]> {
+        if !self.is_complete() || !self.entropy_confirmed {
+            return None;
+        }
+
+        bip39_last_word::entropy_from_indices(&self.word_indices, self.entropy_bits).ok()
+    }
+
+    pub(crate) fn mnemonic_language(&self) -> MnemonicLanguage {
+        self.language
+    }
 }
 
 #[cfg(test)]

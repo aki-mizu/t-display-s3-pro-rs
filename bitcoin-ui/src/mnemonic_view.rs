@@ -1,19 +1,28 @@
 use alloc::{rc::Rc, vec::Vec};
-use core::cell::RefCell;
-use slint::{ComponentHandle, SharedString, VecModel};
+use core::{cell::RefCell, time::Duration};
+use slint::{ComponentHandle, SharedString, Timer, VecModel};
 
-use crate::{generated::AppWindow, mnemonic::LastWordFlow};
+use crate::{
+    address_list::{ReceiveAddressCache, show_address_loading, show_receive_addresses},
+    generated::AppWindow,
+    mnemonic::LastWordFlow,
+};
 
-pub(crate) fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWordFlow>> {
+pub(crate) fn configure_mnemonic_flow(
+    window: &AppWindow,
+    receive_address_cache: Rc<RefCell<Option<ReceiveAddressCache>>>,
+) -> Rc<RefCell<LastWordFlow>> {
     let flow = Rc::new(RefCell::new(LastWordFlow::default()));
     sync_mnemonic_view(window, &flow.borrow());
 
     let weak_window = window.as_weak();
     window.on_mnemonic_key({
         let flow = Rc::clone(&flow);
+        let receive_address_cache = Rc::clone(&receive_address_cache);
         let weak_window = weak_window.clone();
         move |key| {
             flow.borrow_mut().push_letter(key);
+            receive_address_cache.borrow_mut().take();
             if let Some(window) = weak_window.upgrade() {
                 sync_mnemonic_view(&window, &flow.borrow());
             }
@@ -22,9 +31,11 @@ pub(crate) fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWord
 
     window.on_mnemonic_select_language({
         let flow = Rc::clone(&flow);
+        let receive_address_cache = Rc::clone(&receive_address_cache);
         let weak_window = weak_window.clone();
         move |language| {
             flow.borrow_mut().select_language(language);
+            receive_address_cache.borrow_mut().take();
             if let Some(window) = weak_window.upgrade() {
                 sync_mnemonic_view(&window, &flow.borrow());
             }
@@ -33,9 +44,11 @@ pub(crate) fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWord
 
     window.on_mnemonic_backspace({
         let flow = Rc::clone(&flow);
+        let receive_address_cache = Rc::clone(&receive_address_cache);
         let weak_window = weak_window.clone();
         move || {
             flow.borrow_mut().backspace();
+            receive_address_cache.borrow_mut().take();
             if let Some(window) = weak_window.upgrade() {
                 sync_mnemonic_view(&window, &flow.borrow());
             }
@@ -44,6 +57,7 @@ pub(crate) fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWord
 
     window.on_mnemonic_commit({
         let flow = Rc::clone(&flow);
+        let receive_address_cache = Rc::clone(&receive_address_cache);
         let weak_window = weak_window.clone();
         move || {
             // A completed prefix always leads to the final-word screen. This
@@ -59,6 +73,7 @@ pub(crate) fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWord
                     flow.commit_word()
                 }
             };
+            receive_address_cache.borrow_mut().take();
             if let Some(window) = weak_window.upgrade() {
                 if complete {
                     window.set_current_screen(1);
@@ -70,9 +85,11 @@ pub(crate) fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWord
 
     window.on_mnemonic_reset({
         let flow = Rc::clone(&flow);
+        let receive_address_cache = Rc::clone(&receive_address_cache);
         let weak_window = weak_window.clone();
         move || {
             flow.borrow_mut().reset();
+            receive_address_cache.borrow_mut().take();
             if let Some(window) = weak_window.upgrade() {
                 sync_mnemonic_view(&window, &flow.borrow());
             }
@@ -81,9 +98,11 @@ pub(crate) fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWord
 
     window.on_mnemonic_select_pinyin_candidate({
         let flow = Rc::clone(&flow);
+        let receive_address_cache = Rc::clone(&receive_address_cache);
         let weak_window = weak_window.clone();
         move |candidate_offset| {
             let complete = flow.borrow_mut().select_pinyin_candidate(candidate_offset);
+            receive_address_cache.borrow_mut().take();
             if let Some(window) = weak_window.upgrade() {
                 if complete {
                     window.set_current_screen(1);
@@ -140,11 +159,17 @@ pub(crate) fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWord
 
     window.on_select_final_word_candidate({
         let flow = Rc::clone(&flow);
+        let receive_address_cache = Rc::clone(&receive_address_cache);
         let weak_window = weak_window.clone();
         move |candidate_offset| {
-            flow.borrow_mut()
+            let confirmed = flow
+                .borrow_mut()
                 .select_final_word_candidate(candidate_offset);
+            receive_address_cache.borrow_mut().take();
             if let Some(window) = weak_window.upgrade() {
+                if confirmed {
+                    queue_receive_addresses(&window, &flow, &receive_address_cache, 0);
+                }
                 sync_mnemonic_view(&window, &flow.borrow());
             }
         }
@@ -163,9 +188,11 @@ pub(crate) fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWord
 
     window.on_entropy_toggle({
         let flow = Rc::clone(&flow);
+        let receive_address_cache = Rc::clone(&receive_address_cache);
         let weak_window = weak_window.clone();
         move |bit| {
             flow.borrow_mut().toggle_entropy_bit(bit);
+            receive_address_cache.borrow_mut().take();
             if let Some(window) = weak_window.upgrade() {
                 sync_mnemonic_view(&window, &flow.borrow());
             }
@@ -174,9 +201,11 @@ pub(crate) fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWord
 
     window.on_entropy_select_die({
         let flow = Rc::clone(&flow);
+        let receive_address_cache = Rc::clone(&receive_address_cache);
         let weak_window = weak_window.clone();
         move |die, face| {
             flow.borrow_mut().set_entropy_die_face(die, face);
+            receive_address_cache.borrow_mut().take();
             if let Some(window) = weak_window.upgrade() {
                 sync_mnemonic_view(&window, &flow.borrow());
             }
@@ -185,16 +214,105 @@ pub(crate) fn configure_mnemonic_flow(window: &AppWindow) -> Rc<RefCell<LastWord
 
     window.on_entropy_confirm({
         let flow = Rc::clone(&flow);
+        let receive_address_cache = Rc::clone(&receive_address_cache);
         let weak_window = weak_window.clone();
         move || {
             flow.borrow_mut().confirm_entropy();
             if let Some(window) = weak_window.upgrade() {
+                if flow.borrow().is_entropy_confirmed() {
+                    queue_receive_addresses(&window, &flow, &receive_address_cache, 0);
+                }
                 sync_mnemonic_view(&window, &flow.borrow());
             }
         }
     });
 
+    window.on_address_change_page({
+        let flow = Rc::clone(&flow);
+        let receive_address_cache = Rc::clone(&receive_address_cache);
+        let weak_window = weak_window.clone();
+        move |direction| {
+            let Some(window) = weak_window.upgrade() else {
+                return;
+            };
+            let current_start = u32::try_from(window.get_address_start_index()).unwrap_or(0);
+            let next_start = if direction < 0 {
+                current_start.saturating_sub(1)
+            } else if direction > 0 {
+                current_start.saturating_add(1)
+            } else {
+                current_start
+            };
+            queue_receive_addresses(&window, &flow, &receive_address_cache, next_start);
+        }
+    });
+
+    window.on_address_descriptor_change_page({
+        let weak_window = weak_window.clone();
+        move |direction| {
+            let Some(window) = weak_window.upgrade() else {
+                return;
+            };
+            if window.get_address_loading() || window.get_address_view() != 1 {
+                return;
+            }
+
+            let current_page = u32::try_from(window.get_address_descriptor_page()).unwrap_or(0);
+            let page_count = u32::try_from(window.get_address_descriptor_page_count()).unwrap_or(0);
+            let next_page = if direction < 0 {
+                current_page.saturating_sub(1)
+            } else if direction > 0 {
+                current_page
+                    .saturating_add(1)
+                    .min(page_count.saturating_sub(1))
+            } else {
+                current_page
+            };
+            window.set_address_descriptor_page(next_page as i32);
+        }
+    });
+
+    window.on_address_back({
+        let weak_window = weak_window.clone();
+        move || {
+            if let Some(window) = weak_window.upgrade() {
+                window.set_current_screen(1);
+            }
+        }
+    });
+
     flow
+}
+
+fn queue_receive_addresses(
+    window: &AppWindow,
+    flow: &Rc<RefCell<LastWordFlow>>,
+    receive_address_cache: &Rc<RefCell<Option<ReceiveAddressCache>>>,
+    start_index: u32,
+) {
+    show_address_loading(window, start_index);
+    window.set_current_screen(2);
+
+    let weak_window = window.as_weak();
+    let flow = Rc::clone(flow);
+    let receive_address_cache = Rc::clone(receive_address_cache);
+    Timer::single_shot(Duration::ZERO, move || {
+        let Some(window) = weak_window.upgrade() else {
+            return;
+        };
+        if window.get_current_screen() != 2
+            || !window.get_address_loading()
+            || window.get_address_start_index() != start_index as i32
+        {
+            return;
+        }
+        show_receive_addresses(
+            &window,
+            &mut receive_address_cache.borrow_mut(),
+            &flow.borrow(),
+            start_index,
+        );
+    });
 }
 
 pub(crate) fn sync_mnemonic_view(window: &AppWindow, flow: &LastWordFlow) {
@@ -274,7 +392,7 @@ mod tests {
         slint::platform::set_platform(Box::new(TestPlatform(renderer_window.clone()))).ok();
         renderer_window.set_size(PhysicalSize::new(480, 222));
         let window = AppWindow::new().expect("create test window");
-        let flow = configure_mnemonic_flow(&window);
+        let flow = configure_mnemonic_flow(&window, Rc::new(RefCell::new(None)));
 
         window.invoke_mnemonic_key(0);
 
@@ -331,6 +449,44 @@ mod tests {
         assert!(!window.get_final_word_picker_open());
         assert!(window.get_entropy_confirmed());
         assert!(!window.get_candidate_word().is_empty());
+        assert_eq!(window.get_current_screen(), 2);
+        assert_eq!(window.get_address_start_index(), 0);
+        assert!(window.get_address_loading());
+        assert!(
+            window
+                .get_address_rows()
+                .row_data(0)
+                .is_some_and(|row| row.starts_with("Deriving BIP84"))
+        );
+
+        slint::platform::update_timers_and_animations();
+        assert!(!window.get_address_loading());
+        assert!(
+            window
+                .get_address_rows()
+                .row_data(0)
+                .is_some_and(|row| row.starts_with("bc1"))
+        );
+        let first_address = window
+            .get_address_rows()
+            .row_data(0)
+            .expect("derived first address");
+        window.invoke_address_change_page(1);
+        slint::platform::update_timers_and_animations();
+        assert_eq!(window.get_address_start_index(), 1);
+        let second_address = window
+            .get_address_rows()
+            .row_data(0)
+            .expect("derived second address");
+        assert_ne!(first_address, second_address);
+        window.invoke_address_change_page(-1);
+        slint::platform::update_timers_and_animations();
+        assert_eq!(window.get_address_start_index(), 0);
+        assert_eq!(window.get_address_rows().row_data(0), Some(first_address));
+        assert!(window.get_address_descriptor_page_count() > 1);
+        window.set_address_view(1);
+        window.invoke_address_descriptor_change_page(1);
+        assert_eq!(window.get_address_descriptor_page(), 1);
 
         window.invoke_entropy_confirm();
         assert!(window.get_entropy_confirmed());

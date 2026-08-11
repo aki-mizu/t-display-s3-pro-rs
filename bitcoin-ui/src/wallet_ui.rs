@@ -4,6 +4,7 @@ use core::cell::RefCell;
 use slint::ComponentHandle;
 
 use crate::{
+    address_list::ReceiveAddressCache,
     generated::AppWindow,
     mnemonic::LastWordFlow,
     mnemonic_view::{configure_mnemonic_flow, sync_mnemonic_view},
@@ -36,17 +37,20 @@ pub struct BatteryState {
 pub struct WalletUi {
     window: AppWindow,
     mnemonic_flow: Rc<RefCell<LastWordFlow>>,
+    receive_address_cache: Rc<RefCell<Option<ReceiveAddressCache>>>,
 }
 
 impl WalletUi {
     /// Creates the compact 480 by 222 Bitcoin demo window.
     pub fn new() -> Result<Self, UiError> {
         let window = AppWindow::new().map_err(|_| UiError)?;
-        let mnemonic_flow = configure_mnemonic_flow(&window);
+        let receive_address_cache = Rc::new(RefCell::new(None));
+        let mnemonic_flow = configure_mnemonic_flow(&window, Rc::clone(&receive_address_cache));
 
         Ok(Self {
             window,
             mnemonic_flow,
+            receive_address_cache,
         })
     }
 
@@ -71,6 +75,7 @@ impl WalletUi {
         &self,
         word_indices: [u16; PREFIX_WORD_COUNT],
     ) -> Result<(), Bip39Error> {
+        self.receive_address_cache.borrow_mut().take();
         self.mnemonic_flow
             .borrow_mut()
             .load_word_indices(word_indices)?;

@@ -4,6 +4,10 @@ runner = "espflash flash --after hard-reset -c esp32s3 -s 16mb -m dio -f 80mhz -
 [env]
 ESP_LOG = "INFO"
 ESP_HAL_PLACE_SPI_DRIVER_IN_RAM = "true"
+# C dependencies must use the ESP32-S3 driver and long calls so objects can
+# reference ROM and firmware symbols outside Xtensa's short-call range.
+CC_xtensa_esp32s3_none_elf = "xtensa-esp32s3-elf-gcc"
+CFLAGS_xtensa_esp32s3_none_elf = "-mlongcalls"
 
 [build]
 rustflags = ["-C", "link-arg=-nostartfiles"]
