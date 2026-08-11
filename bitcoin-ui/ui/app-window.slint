@@ -19,12 +19,6 @@ component PassphraseKey inherits KeyButton {
     clicked => { root.pressed(root.value); }
 }
 
-component PassphraseSpacer inherits Rectangle {
-    width: 48px;
-    height: 42px;
-    background: #00000000;
-}
-
 component EntropyBitKey inherits Rectangle {
     in-out property <bool> active: false;
     in property <int> position: 1;
@@ -699,6 +693,22 @@ export component AppWindow inherits Window {
                     height: 42px;
                     spacing: 0px;
 
+                    PassphraseKey { width: 48px; height: 42px; value: "1"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "2"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "3"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "4"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "5"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "6"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "7"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "8"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "9"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "0"; pressed(key) => { root.passphrase-key(key); } }
+                }
+
+                if root.passphrase-keyboard-mode == 0: HorizontalLayout {
+                    height: 42px;
+                    spacing: 0px;
+
                     PassphraseKey { width: 48px; height: 42px; value: root.passphrase-shift ? "Q" : "q"; pressed(key) => { root.passphrase-key(key); } }
                     PassphraseKey { width: 48px; height: 42px; value: root.passphrase-shift ? "W" : "w"; pressed(key) => { root.passphrase-key(key); } }
                     PassphraseKey { width: 48px; height: 42px; value: root.passphrase-shift ? "E" : "e"; pressed(key) => { root.passphrase-key(key); } }
@@ -730,8 +740,6 @@ export component AppWindow inherits Window {
 
                 if root.passphrase-keyboard-mode == 0: HorizontalLayout {
                     height: 42px;
-                    padding-left: 24px;
-                    padding-right: 24px;
                     spacing: 0px;
 
                     KeyButton {
@@ -756,50 +764,13 @@ export component AppWindow inherits Window {
                         label-font-size: 8px;
                         clicked => { root.passphrase-backspace(); }
                     }
-                }
-
-                if root.passphrase-keyboard-mode == 0: HorizontalLayout {
-                    height: 42px;
-                    spacing: 0px;
-
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
                     KeyButton {
                         width: 48px;
                         height: 42px;
-                        label: "123";
-                        label-font-size: 11px;
+                        label: "#+=";
+                        label-font-size: 10px;
                         clicked => { root.passphrase-keyboard-mode = 1; root.passphrase-shift = false; }
                     }
-                    KeyButton {
-                        width: 48px;
-                        height: 42px;
-                        label: "Space";
-                        label-font-size: 8px;
-                        clicked => { root.passphrase-key(" "); }
-                    }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                }
-
-                if root.passphrase-keyboard-mode == 1: HorizontalLayout {
-                    height: 42px;
-                    spacing: 0px;
-
-                    PassphraseKey { width: 48px; height: 42px; value: "1"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "2"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "3"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "4"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "5"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "6"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "7"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "8"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "9"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "0"; pressed(key) => { root.passphrase-key(key); } }
                 }
 
                 if root.passphrase-keyboard-mode == 1: HorizontalLayout {
@@ -822,63 +793,6 @@ export component AppWindow inherits Window {
                     height: 42px;
                     spacing: 0px;
 
-                    KeyButton {
-                        width: 48px;
-                        height: 42px;
-                        label: "ABC";
-                        label-font-size: 11px;
-                        clicked => { root.passphrase-keyboard-mode = 0; root.passphrase-shift = false; }
-                    }
-                    KeyButton {
-                        width: 48px;
-                        height: 42px;
-                        label: "#+=";
-                        label-font-size: 10px;
-                        clicked => { root.passphrase-keyboard-mode = 2; }
-                    }
-                    PassphraseKey { width: 48px; height: 42px; value: "["; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "]"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "{"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "}"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "+"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "="; pressed(key) => { root.passphrase-key(key); } }
-                    KeyButton {
-                        width: 48px;
-                        height: 42px;
-                        label: "Space";
-                        label-font-size: 8px;
-                        clicked => { root.passphrase-key(" "); }
-                    }
-                    KeyButton {
-                        width: 48px;
-                        height: 42px;
-                        label: "Back";
-                        label-font-size: 8px;
-                        clicked => { root.passphrase-backspace(); }
-                    }
-                }
-
-                if root.passphrase-keyboard-mode == 1: HorizontalLayout {
-                    height: 42px;
-                    spacing: 0px;
-
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                }
-
-                if root.passphrase-keyboard-mode == 2: HorizontalLayout {
-                    height: 42px;
-                    spacing: 0px;
-
-                    PassphraseSpacer { }
                     PassphraseKey { width: 48px; height: 42px; value: "\""; pressed(key) => { root.passphrase-key(key); } }
                     PassphraseKey { width: 48px; height: 42px; value: "'"; pressed(key) => { root.passphrase-key(key); } }
                     PassphraseKey { width: 48px; height: 42px; value: ","; pressed(key) => { root.passphrase-key(key); } }
@@ -887,45 +801,49 @@ export component AppWindow inherits Window {
                     PassphraseKey { width: 48px; height: 42px; value: "/"; pressed(key) => { root.passphrase-key(key); } }
                     PassphraseKey { width: 48px; height: 42px; value: ":"; pressed(key) => { root.passphrase-key(key); } }
                     PassphraseKey { width: 48px; height: 42px; value: ";"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseSpacer { }
+                    PassphraseKey { width: 48px; height: 42px; value: "?"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "["; pressed(key) => { root.passphrase-key(key); } }
                 }
 
-                if root.passphrase-keyboard-mode == 2: HorizontalLayout {
+                if root.passphrase-keyboard-mode == 1: HorizontalLayout {
                     height: 42px;
+                    padding-left: 24px;
+                    padding-right: 24px;
                     spacing: 0px;
 
-                    PassphraseSpacer { }
+                    PassphraseKey { width: 48px; height: 42px; value: "]"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "{"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "}"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "+"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "="; pressed(key) => { root.passphrase-key(key); } }
                     PassphraseKey { width: 48px; height: 42px; value: "<"; pressed(key) => { root.passphrase-key(key); } }
                     PassphraseKey { width: 48px; height: 42px; value: ">"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "?"; pressed(key) => { root.passphrase-key(key); } }
                     PassphraseKey { width: 48px; height: 42px; value: "\\"; pressed(key) => { root.passphrase-key(key); } }
                     PassphraseKey { width: 48px; height: 42px; value: "_"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "`"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "|"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseKey { width: 48px; height: 42px; value: "~"; pressed(key) => { root.passphrase-key(key); } }
-                    PassphraseSpacer { }
                 }
 
-                if root.passphrase-keyboard-mode == 2: HorizontalLayout {
+                if root.passphrase-keyboard-mode == 1: HorizontalLayout {
                     height: 42px;
+                    padding-left: 96px;
+                    padding-right: 96px;
                     spacing: 0px;
 
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
                     KeyButton {
                         width: 48px;
                         height: 42px;
                         label: "ABC";
-                        label-font-size: 10px;
+                        label-font-size: 11px;
                         clicked => { root.passphrase-keyboard-mode = 0; root.passphrase-shift = false; }
                     }
+                    PassphraseKey { width: 48px; height: 42px; value: "`"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "|"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: "~"; pressed(key) => { root.passphrase-key(key); } }
                     KeyButton {
                         width: 48px;
                         height: 42px;
-                        label: "123";
-                        label-font-size: 10px;
-                        clicked => { root.passphrase-keyboard-mode = 1; }
+                        label: "Back";
+                        label-font-size: 8px;
+                        clicked => { root.passphrase-backspace(); }
                     }
                     KeyButton {
                         width: 48px;
@@ -934,32 +852,6 @@ export component AppWindow inherits Window {
                         label-font-size: 8px;
                         clicked => { root.passphrase-key(" "); }
                     }
-                    KeyButton {
-                        width: 48px;
-                        height: 42px;
-                        label: "Back";
-                        label-font-size: 10px;
-                        clicked => { root.passphrase-backspace(); }
-                    }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                }
-
-                if root.passphrase-keyboard-mode == 2: HorizontalLayout {
-                    height: 42px;
-                    spacing: 0px;
-
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
-                    PassphraseSpacer { }
                 }
             }
         }
