@@ -45,7 +45,10 @@ pub(crate) struct LastWordFlow {
 impl LastWordFlow {
     fn clear_entropy(&mut self) {
         self.entropy_bits = 0;
-        self.entropy_confirmed = false;
+        // Zero is a valid seven-bit entropy selection. Once all eleven
+        // prefix words are present, show its final word and enable Address
+        // immediately; incomplete and reset flows remain unselected.
+        self.entropy_confirmed = self.is_complete();
         self.final_word_candidate_page = 0;
         self.final_word_picker_open = false;
     }

@@ -24,7 +24,7 @@ use crate::{generated::AppWindow, mnemonic::LastWordFlow};
 const ADDRESSES_PER_PAGE: usize = 1;
 const ADDRESSES_PER_PAGE_U32: u32 = ADDRESSES_PER_PAGE as u32;
 const BIP84_ADDRESS_LINE_LENGTH: usize = 21;
-const DESCRIPTOR_CHARS_PER_PAGE: usize = BIP84_ADDRESS_LINE_LENGTH * 2;
+const DESCRIPTOR_LINE_LENGTH: usize = 30;
 const MAX_BIP32_DERIVATION_INDEX: u32 = 0x7fff_ffff;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -164,16 +164,8 @@ pub(crate) fn show_receive_addresses(
     {
         Ok(page) => {
             let rows: Vec<SharedString> = page.rows.into_iter().map(SharedString::from).collect();
-            let descriptor_pages = format_descriptor_pages(&page.descriptor);
-            let descriptor_page_count = descriptor_pages.len();
-            let descriptor_pages: Vec<SharedString> = descriptor_pages
-                .into_iter()
-                .map(SharedString::from)
-                .collect();
             window.set_address_rows(VecModel::from_slice(&rows));
-            window.set_address_descriptor_pages(VecModel::from_slice(&descriptor_pages));
-            window.set_address_descriptor_page(0);
-            window.set_address_descriptor_page_count(descriptor_page_count as i32);
+            window.set_address_descriptor(format_descriptor_for_display(page.descriptor).into());
             window.set_address_view(0);
             window.set_address_start_index(start_index as i32);
             window.set_address_loading(false);
@@ -189,11 +181,8 @@ pub(crate) fn show_receive_addresses(
 
 pub(crate) fn show_address_loading(window: &AppWindow, start_index: u32) {
     let rows = [SharedString::from("Deriving BIP84 receive addresses...")];
-    let descriptor_pages = [SharedString::new()];
     window.set_address_rows(VecModel::from_slice(&rows));
-    window.set_address_descriptor_pages(VecModel::from_slice(&descriptor_pages));
-    window.set_address_descriptor_page(0);
-    window.set_address_descriptor_page_count(0);
+    window.set_address_descriptor("".into());
     window.set_address_view(0);
     window.set_address_start_index(start_index as i32);
     window.set_address_loading(true);
@@ -204,11 +193,8 @@ pub(crate) fn show_address_loading(window: &AppWindow, start_index: u32) {
 
 fn show_unavailable(window: &AppWindow) {
     let rows = [SharedString::from("Unable to derive receive addresses.")];
-    let descriptor_pages = [SharedString::new()];
     window.set_address_rows(VecModel::from_slice(&rows));
-    window.set_address_descriptor_pages(VecModel::from_slice(&descriptor_pages));
-    window.set_address_descriptor_page(0);
-    window.set_address_descriptor_page_count(0);
+    window.set_address_descriptor("".into());
     window.set_address_view(0);
     window.set_address_start_index(0);
     window.set_address_loading(false);
@@ -229,21 +215,19 @@ fn format_address_for_display(address: String) -> String {
     }
 }
 
-fn format_descriptor_pages(descriptor: &str) -> Vec<String> {
-    let mut pages = Vec::with_capacity(descriptor.len().div_ceil(DESCRIPTOR_CHARS_PER_PAGE));
+fn format_descriptor_for_display(descriptor: String) -> String {
+    let mut display = String::with_capacity(
+        descriptor.len() + descriptor.len().div_ceil(DESCRIPTOR_LINE_LENGTH),
+    );
 
-    for chunk in descriptor.as_bytes().chunks(DESCRIPTOR_CHARS_PER_PAGE) {
-        let split_at = chunk.len().min(BIP84_ADDRESS_LINE_LENGTH);
-        let first_line = core::str::from_utf8(&chunk[..split_at]).expect("descriptor is ASCII");
-        let second_line = core::str::from_utf8(&chunk[split_at..]).expect("descriptor is ASCII");
-        pages.push(if second_line.is_empty() {
-            String::from(first_line)
-        } else {
-            format!("{first_line}\n{second_line}")
-        });
+    for (line, chunk) in descriptor.as_bytes().chunks(DESCRIPTOR_LINE_LENGTH).enumerate() {
+        if line > 0 {
+            display.push('\n');
+        }
+        display.push_str(core::str::from_utf8(chunk).expect("descriptor is ASCII"));
     }
 
-    pages
+    display
 }
 
 fn bip84_account_path() -> Result<DerivationPath, AddressListError> {
@@ -288,14 +272,12 @@ mod tests {
         assert!(page.descriptor.contains("/0/0)"));
         assert!(page.descriptor.contains("#"));
 
-        let descriptor_pages = format_descriptor_pages(&page.descriptor);
-        assert!(descriptor_pages.len() > 1);
+        let descriptor_display = format_descriptor_for_display(page.descriptor.clone());
+        assert!(descriptor_display.lines().count() > 1);
         let mut descriptor_round_trip = String::new();
-        for descriptor_page in descriptor_pages {
-            for character in descriptor_page.chars() {
-                if character != '\n' {
-                    descriptor_round_trip.push(character);
-                }
+        for character in descriptor_display.chars() {
+            if character != '\n' {
+                descriptor_round_trip.push(character);
             }
         }
         assert_eq!(descriptor_round_trip, page.descriptor);

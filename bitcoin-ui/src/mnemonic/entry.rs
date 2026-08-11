@@ -452,10 +452,12 @@ mod tests {
         }
         assert!(flow.commit_word());
         assert!(flow.is_complete());
+        assert!(flow.is_entropy_confirmed());
+        assert_eq!(flow.candidate_word(), Some("about"));
     }
 
     #[test]
-    fn loading_indices_replaces_the_prefix_and_clears_entropy() {
+    fn loading_indices_replaces_the_prefix_and_selects_default_entropy() {
         let mut flow = LastWordFlow::default();
         flow.word_indices[0] = 123;
         flow.word_count = 1;
@@ -471,8 +473,8 @@ mod tests {
         assert!(flow.is_complete());
         assert_eq!(flow.prefix_text(), "");
         assert_eq!(flow.entropy_bits, 0);
-        assert!(!flow.entropy_confirmed);
-        assert_eq!(flow.candidate_word(), None);
+        assert!(flow.entropy_confirmed);
+        assert!(flow.candidate_word().is_some());
     }
 
     #[test]

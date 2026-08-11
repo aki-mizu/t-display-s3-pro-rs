@@ -246,31 +246,6 @@ pub(crate) fn configure_mnemonic_flow(
         }
     });
 
-    window.on_address_descriptor_change_page({
-        let weak_window = weak_window.clone();
-        move |direction| {
-            let Some(window) = weak_window.upgrade() else {
-                return;
-            };
-            if window.get_address_loading() || window.get_address_view() != 1 {
-                return;
-            }
-
-            let current_page = u32::try_from(window.get_address_descriptor_page()).unwrap_or(0);
-            let page_count = u32::try_from(window.get_address_descriptor_page_count()).unwrap_or(0);
-            let next_page = if direction < 0 {
-                current_page.saturating_sub(1)
-            } else if direction > 0 {
-                current_page
-                    .saturating_add(1)
-                    .min(page_count.saturating_sub(1))
-            } else {
-                current_page
-            };
-            window.set_address_descriptor_page(next_page as i32);
-        }
-    });
-
     window.on_address_back({
         let weak_window = weak_window.clone();
         move || {
@@ -431,7 +406,8 @@ mod tests {
             .load_word_indices(word_indices)
             .expect("valid test word indices");
         sync_mnemonic_view(&window, &flow.borrow());
-        assert!(!window.get_entropy_confirmed());
+        assert!(window.get_entropy_confirmed());
+        assert!(!window.get_candidate_word().is_empty());
 
         window.invoke_open_final_word_picker();
         assert!(window.get_final_word_picker_open());

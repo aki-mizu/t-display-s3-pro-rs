@@ -226,9 +226,7 @@ export component AppWindow inherits Window {
     in-out property <bool> entropy-bit-1: false;
     in-out property <int> address-start-index: 0;
     in-out property <[string]> address-rows: [];
-    in-out property <[string]> address-descriptor-pages: [];
-    in-out property <int> address-descriptor-page: 0;
-    in-out property <int> address-descriptor-page-count: 0;
+    in-out property <string> address-descriptor: "";
     in-out property <int> address-view: 0;
     in-out property <string> address-page-label: "";
     in-out property <bool> address-loading: false;
@@ -252,7 +250,6 @@ export component AppWindow inherits Window {
         callback entropy-select-die(int, int);
     callback open-addresses();
     callback address-change-page(int);
-    callback address-descriptor-change-page(int);
     callback address-back();
 
     width: 480px;
@@ -596,27 +593,27 @@ export component AppWindow inherits Window {
         }
 
         if root.current-screen == 2: VerticalLayout {
-            padding: 4px;
-            spacing: 4px;
+            padding: 1px;
+            spacing: 1px;
 
             HorizontalLayout {
-                height: 28px;
-                spacing: 4px;
+                height: 26px;
+                spacing: 2px;
 
                 KeyButton {
                     width: 150px;
-                    height: 28px;
+                    height: 26px;
                     label: "Address";
                     active: root.address-view == 0;
                     clicked => { root.address-view = 0; }
                 }
                 KeyButton {
                     width: 150px;
-                    height: 28px;
+                    height: 26px;
                     label: "Descriptor";
                     active: root.address-view == 1;
-                    enabled: !root.address-loading && root.address-descriptor-page-count > 0;
-                    clicked => { root.address-view = 1; root.address-descriptor-page = 0; }
+                    enabled: !root.address-loading && root.address-descriptor != "";
+                    clicked => { root.address-view = 1; }
                 }
                 Text {
                     width: 164px;
@@ -629,7 +626,7 @@ export component AppWindow inherits Window {
             }
 
             Text {
-                height: 16px;
+                height: 14px;
                 text: root.address-view == 0 ? "BIP84 external receive" : "Exact descriptor with checksum";
                 color: BitcoinPalette.muted;
                 font-size: 10px;
@@ -637,17 +634,17 @@ export component AppWindow inherits Window {
             }
 
             Rectangle {
-                height: 130px;
+                height: 150px;
                 background: BitcoinPalette.panel;
                 border-color: BitcoinPalette.border;
                 border-width: 1px;
                 border-radius: 4px;
 
                 Text {
-                    x: 10px;
-                    y: 2px;
-                    width: parent.width - 20px;
-                    height: parent.height - 4px;
+                    x: 2px;
+                    y: 1px;
+                    width: parent.width - 4px;
+                    height: parent.height - 2px;
                     text: root.address-rows[0];
                     color: BitcoinPalette.text;
                     font-size: root.address-loading ? 14px : 32px;
@@ -658,13 +655,13 @@ export component AppWindow inherits Window {
                 }
 
                 Text {
-                    x: 10px;
-                    y: 2px;
-                    width: parent.width - 20px;
-                    height: parent.height - 4px;
-                    text: root.address-descriptor-pages[root.address-descriptor-page];
+                    x: 2px;
+                    y: 1px;
+                    width: parent.width - 4px;
+                    height: parent.height - 2px;
+                    text: root.address-descriptor;
                     color: BitcoinPalette.text;
-                    font-size: 32px;
+                    font-size: 18px;
                     horizontal-alignment: center;
                     vertical-alignment: center;
                     overflow: clip;
@@ -673,18 +670,18 @@ export component AppWindow inherits Window {
             }
 
             if root.address-view == 0: HorizontalLayout {
-                height: 32px;
-                spacing: 4px;
+                height: 28px;
+                spacing: 2px;
 
                 KeyButton {
                     width: 112px;
-                    height: 32px;
+                    height: 28px;
                     label: "Back";
                     clicked => { root.address-back(); }
                 }
                 KeyButton {
                     width: 112px;
-                    height: 32px;
+                    height: 28px;
                     label: "<";
                     label-font-size: 18px;
                     enabled: !root.address-loading && root.address-has-previous-page;
@@ -700,7 +697,7 @@ export component AppWindow inherits Window {
                 }
                 KeyButton {
                     width: 112px;
-                    height: 32px;
+                    height: 28px;
                     label: ">";
                     label-font-size: 18px;
                     enabled: !root.address-loading && root.address-has-next-page;
@@ -709,38 +706,22 @@ export component AppWindow inherits Window {
             }
 
             if root.address-view == 1: HorizontalLayout {
-                height: 32px;
-                spacing: 4px;
+                height: 28px;
+                spacing: 2px;
 
                 KeyButton {
                     width: 112px;
-                    height: 32px;
+                    height: 28px;
                     label: "Back";
                     clicked => { root.address-back(); }
                 }
-                KeyButton {
-                    width: 112px;
-                    height: 32px;
-                    label: "<";
-                    label-font-size: 18px;
-                    enabled: root.address-descriptor-page > 0;
-                    clicked => { root.address-descriptor-change-page(-1); }
-                }
                 Text {
-                    width: 124px;
-                    text: (root.address-descriptor-page + 1) + " / " + root.address-descriptor-page-count;
+                    width: 352px;
+                    text: "Exact descriptor with checksum";
                     color: BitcoinPalette.muted;
                     font-size: 10px;
                     horizontal-alignment: center;
                     vertical-alignment: center;
-                }
-                KeyButton {
-                    width: 112px;
-                    height: 32px;
-                    label: ">";
-                    label-font-size: 18px;
-                    enabled: root.address-descriptor-page + 1 < root.address-descriptor-page-count;
-                    clicked => { root.address-descriptor-change-page(1); }
                 }
             }
         }

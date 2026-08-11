@@ -187,14 +187,15 @@ mod tests {
     use bip39_last_word::PREFIX_WORD_COUNT;
 
     #[test]
-    fn selecting_zero_entropy_reveals_the_final_word() {
+    fn default_zero_entropy_reveals_the_final_word() {
         let mut flow = LastWordFlow::default();
         for _ in 0..PREFIX_WORD_COUNT {
             super::super::enter_word(&mut flow, "abandon");
         }
 
         assert!(flow.is_complete());
-        assert_eq!(flow.candidate_word(), None);
+        assert!(flow.is_entropy_confirmed());
+        assert_eq!(flow.candidate_word(), Some("about"));
         flow.set_entropy_die_face(0, 1);
         assert_eq!(flow.candidate_word(), Some("about"));
     }
