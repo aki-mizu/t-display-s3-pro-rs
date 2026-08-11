@@ -103,6 +103,7 @@ pub(crate) fn configure_mnemonic_flow(
             flow.borrow_mut().open_passphrase_editor();
             if let Some(window) = weak_window.upgrade() {
                 window.set_passphrase_keyboard_mode(0);
+                window.set_passphrase_shift(false);
                 sync_mnemonic_view(&window, &flow.borrow());
             }
         }

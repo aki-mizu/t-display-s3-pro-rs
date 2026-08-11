@@ -9,7 +9,7 @@ const MAX_ENGLISH_PREFIX_LEN: usize = 4;
 const MAX_PINYIN_PREFIX_LEN: usize = 6;
 const MAX_WORD_PREFIX_LEN: usize = MAX_PINYIN_PREFIX_LEN;
 const PINYIN_CANDIDATES_PER_PAGE: usize = 6;
-const MAX_PASSPHRASE_BYTES: usize = 64;
+const MAX_PASSPHRASE_BYTES: usize = 128;
 
 /// Visible error result of an unsuccessful `Use word` action.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

@@ -294,6 +294,24 @@ mod tests {
     }
 
     #[test]
+    fn accepts_every_printable_ascii_passphrase_character() {
+        let mut flow = LastWordFlow::default();
+        let mut expected = String::new();
+
+        flow.open_passphrase_editor();
+        for byte in 0x20_u8..=0x7e {
+            let bytes = [byte];
+            let key = core::str::from_utf8(&bytes).expect("printable ASCII");
+            flow.append_passphrase_key(key);
+            expected.push(char::from(byte));
+        }
+
+        flow.toggle_passphrase_visibility();
+        assert_eq!(expected.len(), 95);
+        assert_eq!(flow.passphrase_display(), expected);
+    }
+
+    #[test]
     fn selecting_a_final_word_candidate_confirms_its_entropy_bits() {
         let mut flow = LastWordFlow::default();
         for _ in 0..PREFIX_WORD_COUNT {
