@@ -250,7 +250,7 @@ export component AppWindow inherits Window {
     callback request-random-words();
     callback entropy-toggle(int);
         callback entropy-select-die(int, int);
-    callback entropy-confirm();
+    callback open-addresses();
     callback address-change-page(int);
     callback address-descriptor-change-page(int);
     callback address-back();
@@ -512,7 +512,7 @@ export component AppWindow inherits Window {
                     spacing: 1px;
 
                     Text {
-                        text: root.candidate-word == "" ? "Final word is not revealed." : "Final word: " + root.candidate-word;
+                        text: root.candidate-word == "" ? "Select entropy or pick a final word." : "Final word: " + root.candidate-word;
                         color: BitcoinPalette.text;
                         font-size: 12px;
                         font-family: root.mnemonic-language == 1 ? "Noto Sans CJK SC" : "";
@@ -563,34 +563,33 @@ export component AppWindow inherits Window {
 
             HorizontalLayout {
                 height: 42px;
-                padding-left: 1px;
-                padding-right: 1px;
+                padding-left: 0px;
+                padding-right: 0px;
                 spacing: 2px;
 
                 KeyButton {
                     width: 118px;
                     height: 42px;
-                    label: "Edit words";
+                    label: "Edit";
                     clicked => { root.current-screen = 0; }
                 }
                 KeyButton {
                     width: 118px;
                     height: 42px;
-                    label: "Pick word";
+                    label: "Pick";
                     clicked => { root.open-final-word-picker(); }
                 }
                 KeyButton {
                     width: 118px;
                     height: 42px;
-                    label: "Confirm entropy";
-                    active: !root.entropy-confirmed;
-                    enabled: !root.entropy-confirmed;
-                    clicked => { root.entropy-confirm(); }
+                    label: "Address";
+                    enabled: root.entropy-confirmed;
+                    clicked => { root.open-addresses(); }
                 }
                 KeyButton {
                     width: 118px;
                     height: 42px;
-                    label: "Start over";
+                    label: "Reset";
                     clicked => { root.mnemonic-reset(); root.current-screen = 0; }
                 }
             }

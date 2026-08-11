@@ -19,7 +19,7 @@ impl LastWordFlow {
         }
 
         self.entropy_bits ^= 1_u8 << bit;
-        self.entropy_confirmed = false;
+        self.entropy_confirmed = true;
     }
 
     pub(crate) fn set_entropy_die_face(&mut self, die: i32, face: i32) {
@@ -36,15 +36,7 @@ impl LastWordFlow {
             1 if (1..=16).contains(&face) => (self.entropy_bits & 0x70) | (face - 1),
             _ => return,
         };
-        self.entropy_confirmed = false;
-    }
-
-    pub(crate) fn confirm_entropy(&mut self) {
-        if self.is_complete() {
-            // This explicit action is required even when the selected value is
-            // 0000000. Eleven words alone do not select a unique final word.
-            self.entropy_confirmed = true;
-        }
+        self.entropy_confirmed = true;
     }
 
     pub(crate) fn open_final_word_picker(&mut self) -> bool {
@@ -195,7 +187,7 @@ mod tests {
     use bip39_last_word::PREFIX_WORD_COUNT;
 
     #[test]
-    fn requires_explicit_entropy_confirmation_for_zero() {
+    fn selecting_zero_entropy_reveals_the_final_word() {
         let mut flow = LastWordFlow::default();
         for _ in 0..PREFIX_WORD_COUNT {
             super::super::enter_word(&mut flow, "abandon");
@@ -203,21 +195,24 @@ mod tests {
 
         assert!(flow.is_complete());
         assert_eq!(flow.candidate_word(), None);
-        flow.confirm_entropy();
+        flow.set_entropy_die_face(0, 1);
         assert_eq!(flow.candidate_word(), Some("about"));
     }
 
     #[test]
-    fn changing_entropy_hides_the_previous_result() {
+    fn changing_entropy_reveals_the_updated_word() {
         let mut flow = LastWordFlow::default();
         for _ in 0..PREFIX_WORD_COUNT {
             super::super::enter_word(&mut flow, "abandon");
         }
-        flow.confirm_entropy();
+        flow.set_entropy_die_face(0, 1);
         assert_eq!(flow.candidate_word(), Some("about"));
 
         flow.toggle_entropy_bit(0);
-        assert_eq!(flow.candidate_word(), None);
+        assert_eq!(
+            flow.candidate_word(),
+            word_for_entropy_bits_in(flow.language, &flow.word_indices, flow.entropy_bits).ok()
+        );
     }
 
     #[test]
@@ -238,11 +233,10 @@ mod tests {
         assert_eq!(flow.entropy_octal_bits(), "101");
         assert_eq!(flow.entropy_hex_bits(), "1100");
 
-        flow.confirm_entropy();
         assert!(flow.candidate_word().is_some());
 
         flow.set_entropy_die_face(1, 14);
-        assert_eq!(flow.candidate_word(), None);
+        assert!(flow.candidate_word().is_some());
 
         let entropy_bits = flow.entropy_bits;
         flow.set_entropy_die_face(0, 0);
@@ -268,7 +262,6 @@ mod tests {
             flow.toggle_entropy_bit(bit);
         }
 
-        flow.confirm_entropy();
         assert_eq!(flow.candidate_word(), Some("yellow"));
     }
 

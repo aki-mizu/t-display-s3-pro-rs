@@ -168,7 +168,7 @@ pub(crate) fn configure_mnemonic_flow(
             receive_address_cache.borrow_mut().take();
             if let Some(window) = weak_window.upgrade() {
                 if confirmed {
-                    queue_receive_addresses(&window, &flow, &receive_address_cache, 0);
+                    window.set_current_screen(1);
                 }
                 sync_mnemonic_view(&window, &flow.borrow());
             }
@@ -212,17 +212,16 @@ pub(crate) fn configure_mnemonic_flow(
         }
     });
 
-    window.on_entropy_confirm({
+    window.on_open_addresses({
         let flow = Rc::clone(&flow);
         let receive_address_cache = Rc::clone(&receive_address_cache);
         let weak_window = weak_window.clone();
         move || {
-            flow.borrow_mut().confirm_entropy();
+            if !flow.borrow().is_entropy_confirmed() {
+                return;
+            }
             if let Some(window) = weak_window.upgrade() {
-                if flow.borrow().is_entropy_confirmed() {
-                    queue_receive_addresses(&window, &flow, &receive_address_cache, 0);
-                }
-                sync_mnemonic_view(&window, &flow.borrow());
+                queue_receive_addresses(&window, &flow, &receive_address_cache, 0);
             }
         }
     });
@@ -449,6 +448,9 @@ mod tests {
         assert!(!window.get_final_word_picker_open());
         assert!(window.get_entropy_confirmed());
         assert!(!window.get_candidate_word().is_empty());
+        assert_eq!(window.get_current_screen(), 1);
+        assert!(!window.get_address_loading());
+        window.invoke_open_addresses();
         assert_eq!(window.get_current_screen(), 2);
         assert_eq!(window.get_address_start_index(), 0);
         assert!(window.get_address_loading());
@@ -488,11 +490,10 @@ mod tests {
         window.invoke_address_descriptor_change_page(1);
         assert_eq!(window.get_address_descriptor_page(), 1);
 
-        window.invoke_entropy_confirm();
-        assert!(window.get_entropy_confirmed());
-        assert_eq!(window.get_candidate_word().as_str().chars().count(), 1);
-
+        window.set_current_screen(1);
         window.invoke_entropy_toggle(0);
-        assert!(!window.get_entropy_confirmed());
+        assert!(window.get_entropy_confirmed());
+        assert_eq!(window.get_current_screen(), 1);
+        assert_eq!(window.get_candidate_word().as_str().chars().count(), 1);
     }
 }
