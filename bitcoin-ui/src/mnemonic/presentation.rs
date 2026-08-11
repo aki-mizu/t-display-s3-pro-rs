@@ -3,8 +3,7 @@ use bip39_last_word::{MnemonicLanguage, word_for_index_in, word_index, words_by_
 
 use super::{CommitFeedback, LastWordFlow};
 
-const WORD_LIST_HORIZONTAL_MARGIN_PX: usize = 1;
-const WORD_LIST_DISPLAY_WIDTH_PX: usize = 480 - (WORD_LIST_HORIZONTAL_MARGIN_PX * 2);
+const WORD_LIST_DISPLAY_WIDTH_PX: usize = 448;
 const WORD_LIST_FONT_METRIC_SIZE_PX: usize = 9;
 const WORD_LIST_GLYPH_ADVANCE_SCALE: usize = 64;
 const WORD_LIST_MIN_FONT_SIZE_HUNDREDTHS: i32 = 600;
@@ -176,7 +175,7 @@ mod tests {
         for _ in 0..(PREFIX_WORD_COUNT - 1) {
             super::super::enter_word(&mut flow, "abandon");
         }
-        assert_eq!(flow.confirmed_words_font_size_hundredths(), 1_110);
+        assert_eq!(flow.confirmed_words_font_size_hundredths(), 1_040);
     }
 
     #[test]
