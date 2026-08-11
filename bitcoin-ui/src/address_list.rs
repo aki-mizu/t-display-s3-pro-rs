@@ -216,11 +216,14 @@ fn format_address_for_display(address: String) -> String {
 }
 
 fn format_descriptor_for_display(descriptor: String) -> String {
-    let mut display = String::with_capacity(
-        descriptor.len() + descriptor.len().div_ceil(DESCRIPTOR_LINE_LENGTH),
-    );
+    let mut display =
+        String::with_capacity(descriptor.len() + descriptor.len().div_ceil(DESCRIPTOR_LINE_LENGTH));
 
-    for (line, chunk) in descriptor.as_bytes().chunks(DESCRIPTOR_LINE_LENGTH).enumerate() {
+    for (line, chunk) in descriptor
+        .as_bytes()
+        .chunks(DESCRIPTOR_LINE_LENGTH)
+        .enumerate()
+    {
         if line > 0 {
             display.push('\n');
         }
