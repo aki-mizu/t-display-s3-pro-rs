@@ -267,6 +267,33 @@ mod tests {
     }
 
     #[test]
+    fn commits_or_cancels_a_masked_passphrase() {
+        let mut flow = LastWordFlow::default();
+
+        flow.open_passphrase_editor();
+        for key in ["T", "R", "E", "Z", "O", "R"] {
+            flow.append_passphrase_key(key);
+        }
+        assert_eq!(flow.passphrase_display(), "******");
+        assert!(!flow.has_passphrase());
+
+        flow.cancel_passphrase_editor();
+        assert!(!flow.has_passphrase());
+        assert!(!flow.is_passphrase_editor_open());
+
+        flow.open_passphrase_editor();
+        for key in ["T", "R", "E", "Z", "O", "R"] {
+            flow.append_passphrase_key(key);
+        }
+        flow.toggle_passphrase_visibility();
+        assert_eq!(flow.passphrase_display(), "TREZOR");
+        assert!(flow.save_passphrase());
+        assert_eq!(flow.bip39_passphrase(), "TREZOR");
+        assert!(flow.has_passphrase());
+        assert!(!flow.is_passphrase_editor_open());
+    }
+
+    #[test]
     fn selecting_a_final_word_candidate_confirms_its_entropy_bits() {
         let mut flow = LastWordFlow::default();
         for _ in 0..PREFIX_WORD_COUNT {

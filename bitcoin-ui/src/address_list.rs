@@ -12,7 +12,7 @@ use bdk_chain::{
     },
     indexer::keychain_txout::KeychainTxOutIndex,
 };
-use bip39_last_word::{MnemonicLanguage, seed_from_entropy_with_empty_passphrase};
+use bip39_last_word::{MnemonicLanguage, seed_from_entropy};
 use miniscript::{
     Descriptor, DescriptorPublicKey,
     descriptor::{DescriptorXKey, Wildcard},
@@ -74,14 +74,15 @@ impl ReceiveAddressCache {
             .finalized_entropy()
             .ok_or(AddressListError::MissingEntropy)?;
 
-        Self::from_entropy(entropy, flow.mnemonic_language())
+        Self::from_entropy(entropy, flow.mnemonic_language(), flow.bip39_passphrase())
     }
 
     fn from_entropy(
         entropy: [u8; 16],
         language: MnemonicLanguage,
+        passphrase: &str,
     ) -> Result<Self, AddressListError> {
-        let seed = seed_from_entropy_with_empty_passphrase(language, &entropy);
+        let seed = seed_from_entropy(language, &entropy, passphrase);
         let secp = Secp256k1::signing_only();
         let master_key = Xpriv::new_master(Network::Bitcoin, &seed)
             .map_err(|_| AddressListError::InvalidMasterKey)?;
@@ -265,7 +266,7 @@ mod tests {
 
     #[test]
     fn derives_the_first_bip84_receive_address() {
-        let mut cache = ReceiveAddressCache::from_entropy([0; 16], MnemonicLanguage::English)
+        let mut cache = ReceiveAddressCache::from_entropy([0; 16], MnemonicLanguage::English, "")
             .expect("create receive address cache");
         let page = cache.page_at(0).expect("derive BIP84 receive address zero");
 
@@ -288,7 +289,7 @@ mod tests {
 
     #[test]
     fn binds_the_descriptor_to_the_selected_address_index() {
-        let mut cache = ReceiveAddressCache::from_entropy([0; 16], MnemonicLanguage::English)
+        let mut cache = ReceiveAddressCache::from_entropy([0; 16], MnemonicLanguage::English, "")
             .expect("create receive address cache");
         let page = cache.page_at(1).expect("derive BIP84 receive address one");
 
@@ -299,7 +300,7 @@ mod tests {
 
     #[test]
     fn retains_revealed_pages_for_back_navigation() {
-        let mut cache = ReceiveAddressCache::from_entropy([0; 16], MnemonicLanguage::English)
+        let mut cache = ReceiveAddressCache::from_entropy([0; 16], MnemonicLanguage::English, "")
             .expect("create receive address cache");
         let first_page = cache.page_at(0).expect("derive receive address zero");
         let second_page = cache.page_at(1).expect("derive receive address one");
@@ -309,5 +310,24 @@ mod tests {
         assert_eq!(cache.index.last_revealed_index(Keychain::External), Some(1));
         assert_eq!(first_page.rows, first_page_again.rows);
         assert_ne!(first_page.rows, second_page.rows);
+    }
+
+    #[test]
+    fn passphrase_changes_the_receive_address() {
+        let mut empty_passphrase =
+            ReceiveAddressCache::from_entropy([0; 16], MnemonicLanguage::English, "")
+                .expect("create empty-passphrase cache");
+        let mut trezor_passphrase =
+            ReceiveAddressCache::from_entropy([0; 16], MnemonicLanguage::English, "TREZOR")
+                .expect("create TREZOR-passphrase cache");
+
+        let empty_address = empty_passphrase
+            .page_at(0)
+            .expect("derive empty-passphrase address");
+        let trezor_address = trezor_passphrase
+            .page_at(0)
+            .expect("derive TREZOR-passphrase address");
+
+        assert_ne!(empty_address.rows, trezor_address.rows);
     }
 }

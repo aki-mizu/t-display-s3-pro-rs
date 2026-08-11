@@ -143,6 +143,7 @@ impl LastWordFlow {
         self.commit_feedback = CommitFeedback::None;
         self.pinyin_candidate_page = 0;
         self.pinyin_candidate_picker_open = false;
+        self.clear_passphrase();
         self.clear_entropy();
         Ok(())
     }

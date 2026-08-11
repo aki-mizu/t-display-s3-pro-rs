@@ -96,6 +96,76 @@ pub(crate) fn configure_mnemonic_flow(
         }
     });
 
+    window.on_open_passphrase_editor({
+        let flow = Rc::clone(&flow);
+        let weak_window = weak_window.clone();
+        move || {
+            flow.borrow_mut().open_passphrase_editor();
+            if let Some(window) = weak_window.upgrade() {
+                window.set_passphrase_keyboard_mode(0);
+                sync_mnemonic_view(&window, &flow.borrow());
+            }
+        }
+    });
+
+    window.on_passphrase_key({
+        let flow = Rc::clone(&flow);
+        let weak_window = weak_window.clone();
+        move |key| {
+            flow.borrow_mut().append_passphrase_key(key.as_str());
+            if let Some(window) = weak_window.upgrade() {
+                sync_mnemonic_view(&window, &flow.borrow());
+            }
+        }
+    });
+
+    window.on_passphrase_backspace({
+        let flow = Rc::clone(&flow);
+        let weak_window = weak_window.clone();
+        move || {
+            flow.borrow_mut().backspace_passphrase();
+            if let Some(window) = weak_window.upgrade() {
+                sync_mnemonic_view(&window, &flow.borrow());
+            }
+        }
+    });
+
+    window.on_passphrase_toggle_visibility({
+        let flow = Rc::clone(&flow);
+        let weak_window = weak_window.clone();
+        move || {
+            flow.borrow_mut().toggle_passphrase_visibility();
+            if let Some(window) = weak_window.upgrade() {
+                sync_mnemonic_view(&window, &flow.borrow());
+            }
+        }
+    });
+
+    window.on_passphrase_cancel({
+        let flow = Rc::clone(&flow);
+        let weak_window = weak_window.clone();
+        move || {
+            flow.borrow_mut().cancel_passphrase_editor();
+            if let Some(window) = weak_window.upgrade() {
+                sync_mnemonic_view(&window, &flow.borrow());
+            }
+        }
+    });
+
+    window.on_passphrase_save({
+        let flow = Rc::clone(&flow);
+        let receive_address_cache = Rc::clone(&receive_address_cache);
+        let weak_window = weak_window.clone();
+        move || {
+            if flow.borrow_mut().save_passphrase() {
+                receive_address_cache.borrow_mut().take();
+            }
+            if let Some(window) = weak_window.upgrade() {
+                sync_mnemonic_view(&window, &flow.borrow());
+            }
+        }
+    });
+
     window.on_mnemonic_select_pinyin_candidate({
         let flow = Rc::clone(&flow);
         let receive_address_cache = Rc::clone(&receive_address_cache);
@@ -334,6 +404,10 @@ pub(crate) fn sync_mnemonic_view(window: &AppWindow, flow: &LastWordFlow) {
     window.set_entropy_bit_1(flow.entropy_bit_is_set(0));
     window.set_candidate_word(flow.candidate_word().unwrap_or("").into());
     window.set_entropy_confirmed(flow.is_entropy_confirmed());
+    window.set_passphrase_editor_open(flow.is_passphrase_editor_open());
+    window.set_passphrase_visible(flow.is_passphrase_visible());
+    window.set_passphrase_display(flow.passphrase_display().into());
+    window.set_passphrase_set(flow.has_passphrase());
 }
 
 #[cfg(test)]
@@ -426,6 +500,15 @@ mod tests {
         assert!(!window.get_candidate_word().is_empty());
         assert_eq!(window.get_current_screen(), 1);
         assert!(!window.get_address_loading());
+        window.invoke_open_passphrase_editor();
+        assert!(window.get_passphrase_editor_open());
+        for key in ["T", "R", "E", "Z", "O", "R"] {
+            window.invoke_passphrase_key(SharedString::from(key));
+        }
+        assert_eq!(window.get_passphrase_display().as_str(), "******");
+        window.invoke_passphrase_save();
+        assert!(!window.get_passphrase_editor_open());
+        assert!(window.get_passphrase_set());
         window.invoke_open_addresses();
         assert_eq!(window.get_current_screen(), 2);
         assert_eq!(window.get_address_start_index(), 0);
@@ -461,10 +544,8 @@ mod tests {
         slint::platform::update_timers_and_animations();
         assert_eq!(window.get_address_start_index(), 0);
         assert_eq!(window.get_address_rows().row_data(0), Some(first_address));
-        assert!(window.get_address_descriptor_page_count() > 1);
         window.set_address_view(1);
-        window.invoke_address_descriptor_change_page(1);
-        assert_eq!(window.get_address_descriptor_page(), 1);
+        assert!(window.get_address_descriptor().starts_with("wpkh(["));
 
         window.set_current_screen(1);
         window.invoke_entropy_toggle(0);

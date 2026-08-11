@@ -8,6 +8,15 @@ component Bip39LetterKey inherits KeyButton {
     letter-key: true;
 }
 
+component PassphraseKey inherits KeyButton {
+    in property <string> value: "";
+    callback pressed(string);
+
+    label: root.value;
+
+    clicked => { root.pressed(root.value); }
+}
+
 component EntropyBitKey inherits Rectangle {
     in-out property <bool> active: false;
     in property <int> position: 1;
@@ -224,6 +233,11 @@ export component AppWindow inherits Window {
     in-out property <bool> entropy-bit-4: false;
     in-out property <bool> entropy-bit-2: false;
     in-out property <bool> entropy-bit-1: false;
+    in-out property <bool> passphrase-editor-open: false;
+    in-out property <bool> passphrase-visible: false;
+    in-out property <string> passphrase-display: "";
+    in-out property <bool> passphrase-set: false;
+    in-out property <int> passphrase-keyboard-mode: 0;
     in-out property <int> address-start-index: 0;
     in-out property <[string]> address-rows: [];
     in-out property <string> address-descriptor: "";
@@ -248,6 +262,12 @@ export component AppWindow inherits Window {
     callback request-random-words();
     callback entropy-toggle(int);
         callback entropy-select-die(int, int);
+    callback open-passphrase-editor();
+    callback passphrase-key(string);
+    callback passphrase-backspace();
+    callback passphrase-toggle-visibility();
+    callback passphrase-save();
+    callback passphrase-cancel();
     callback open-addresses();
     callback address-change-page(int);
     callback address-back();
@@ -565,29 +585,172 @@ export component AppWindow inherits Window {
                 spacing: 2px;
 
                 KeyButton {
-                    width: 118px;
+                    width: 94px;
                     height: 42px;
                     label: "Edit";
                     clicked => { root.current-screen = 0; }
                 }
                 KeyButton {
-                    width: 118px;
+                    width: 94px;
                     height: 42px;
                     label: "Pick";
                     clicked => { root.open-final-word-picker(); }
                 }
                 KeyButton {
-                    width: 118px;
+                    width: 94px;
+                    height: 42px;
+                    label: "Passphrase";
+                    label-font-size: 10px;
+                    active: root.passphrase-set;
+                    clicked => { root.open-passphrase-editor(); }
+                }
+                KeyButton {
+                    width: 94px;
                     height: 42px;
                     label: "Address";
                     enabled: root.entropy-confirmed;
                     clicked => { root.open-addresses(); }
                 }
                 KeyButton {
-                    width: 118px;
+                    width: 94px;
                     height: 42px;
                     label: "Reset";
                     clicked => { root.mnemonic-reset(); root.current-screen = 0; }
+                }
+            }
+        }
+
+        if root.passphrase-editor-open: Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: parent.height;
+            background: BitcoinPalette.page;
+
+            VerticalLayout {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: parent.height;
+                padding: 3px;
+                spacing: 2px;
+
+                HorizontalLayout {
+                    height: 28px;
+                    spacing: 4px;
+
+                    Text {
+                        width: 208px;
+                        text: "BIP39 passphrase";
+                        color: BitcoinPalette.text;
+                        font-size: 14px;
+                        font-weight: 800;
+                        vertical-alignment: center;
+                    }
+                    KeyButton {
+                        width: 80px;
+                        height: 28px;
+                        label: root.passphrase-visible ? "Hide" : "Show";
+                        clicked => { root.passphrase-toggle-visibility(); }
+                    }
+                    KeyButton {
+                        width: 80px;
+                        height: 28px;
+                        label: "Cancel";
+                        clicked => { root.passphrase-cancel(); }
+                    }
+                    KeyButton {
+                        width: 100px;
+                        height: 28px;
+                        label: "Done";
+                        active: true;
+                        clicked => { root.passphrase-save(); }
+                    }
+                }
+
+                Rectangle {
+                    height: 30px;
+                    background: BitcoinPalette.panel;
+                    border-color: BitcoinPalette.border;
+                    border-width: 1px;
+                    border-radius: 4px;
+
+                    Text {
+                        x: 8px;
+                        width: parent.width - 16px;
+                        text: root.passphrase-display == "" ? "No passphrase" : root.passphrase-display;
+                        color: root.passphrase-display == "" ? BitcoinPalette.muted : BitcoinPalette.text;
+                        font-size: 13px;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                }
+
+                HorizontalLayout {
+                    height: 42px;
+                    spacing: 0px;
+
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "q" : root.passphrase-keyboard-mode == 1 ? "Q" : "1"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "w" : root.passphrase-keyboard-mode == 1 ? "W" : "2"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "e" : root.passphrase-keyboard-mode == 1 ? "E" : "3"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "r" : root.passphrase-keyboard-mode == 1 ? "R" : "4"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "t" : root.passphrase-keyboard-mode == 1 ? "T" : "5"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "y" : root.passphrase-keyboard-mode == 1 ? "Y" : "6"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "u" : root.passphrase-keyboard-mode == 1 ? "U" : "7"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "i" : root.passphrase-keyboard-mode == 1 ? "I" : "8"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "o" : root.passphrase-keyboard-mode == 1 ? "O" : "9"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "p" : root.passphrase-keyboard-mode == 1 ? "P" : "0"; pressed(key) => { root.passphrase-key(key); } }
+                }
+
+                HorizontalLayout {
+                    height: 42px;
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    spacing: 0px;
+
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "a" : root.passphrase-keyboard-mode == 1 ? "A" : "!"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "s" : root.passphrase-keyboard-mode == 1 ? "S" : "@"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "d" : root.passphrase-keyboard-mode == 1 ? "D" : "#"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "f" : root.passphrase-keyboard-mode == 1 ? "F" : "$"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "g" : root.passphrase-keyboard-mode == 1 ? "G" : "%"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "h" : root.passphrase-keyboard-mode == 1 ? "H" : "^"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "j" : root.passphrase-keyboard-mode == 1 ? "J" : "&"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "k" : root.passphrase-keyboard-mode == 1 ? "K" : "*"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 48px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "l" : root.passphrase-keyboard-mode == 1 ? "L" : "("; pressed(key) => { root.passphrase-key(key); } }
+                }
+
+                HorizontalLayout {
+                    height: 42px;
+                    spacing: 0px;
+
+                    KeyButton {
+                        width: 54px;
+                        height: 42px;
+                        label: root.passphrase-keyboard-mode == 0 ? "ABC" : root.passphrase-keyboard-mode == 1 ? "123" : "abc";
+                        label-font-size: 10px;
+                        clicked => { root.passphrase-keyboard-mode = mod(root.passphrase-keyboard-mode + 1, 3); }
+                    }
+                    PassphraseKey { width: 42px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "z" : root.passphrase-keyboard-mode == 1 ? "Z" : ")"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 42px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "x" : root.passphrase-keyboard-mode == 1 ? "X" : "["; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 42px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "c" : root.passphrase-keyboard-mode == 1 ? "C" : "]"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 42px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "v" : root.passphrase-keyboard-mode == 1 ? "V" : "{"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 42px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "b" : root.passphrase-keyboard-mode == 1 ? "B" : "}"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 42px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "n" : root.passphrase-keyboard-mode == 1 ? "N" : "+"; pressed(key) => { root.passphrase-key(key); } }
+                    PassphraseKey { width: 42px; height: 42px; value: root.passphrase-keyboard-mode == 0 ? "m" : root.passphrase-keyboard-mode == 1 ? "M" : "="; pressed(key) => { root.passphrase-key(key); } }
+                    KeyButton {
+                        width: 68px;
+                        height: 42px;
+                        label: "Space";
+                        label-font-size: 10px;
+                        clicked => { root.passphrase-key(" "); }
+                    }
+                    KeyButton {
+                        width: 64px;
+                        height: 42px;
+                        label: "Back";
+                        label-font-size: 10px;
+                        clicked => { root.passphrase-backspace(); }
+                    }
                 }
             }
         }
